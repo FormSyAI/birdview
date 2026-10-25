@@ -9,6 +9,23 @@ import { validate } from '../src/validate.mjs';
 const example = architecture(fs.readFileSync(new URL('../examples/architecture.json', import.meta.url), 'utf8'));
 const bilingual = architecture(fs.readFileSync(new URL('../examples/bilingual.architecture.json', import.meta.url), 'utf8'));
 
+test('reader adapts the native graph with the same validated data and controls', () => {
+  const input = JSON.stringify(bilingual);
+  const html = renderArchitecture(bilingual, [], { presentation: 'reader' });
+  assert.match(html, /id="map-stage"/);
+  assert.match(html, /id="connections"/);
+  assert.match(html, /id="module-name"/);
+  assert.ok(!html.includes('/* BIRDVIEW_'));
+  assert.ok(!html.includes('id="reader-root"'));
+  assert.equal(JSON.stringify(bilingual), input);
+  assert.ok(html.includes('MIT License'));
+  assert.equal(renderArchitecture(bilingual), renderArchitecture(bilingual, [], { presentation: 'explorer' }));
+  assert.throws(() => renderArchitecture(bilingual, [], { ...{ presentation: 'unknown' as 'reader' } }), /Unknown presentation/);
+  assert.throws(() => renderArchitecture(bilingual, [], { presentation: 'reader', reviewHref: 'review.html' }), /use explorer/);
+  const configured = renderArchitecture(bilingual, [], { presentation: 'reader', readerLanguage: 'zh', readerTheme: 'dark' });
+  assert.match(configured, /"readerLanguage":"zh","readerTheme":"dark"/);
+});
+
 test('rendered HTML is identical across LF and CRLF text assets', (t) => {
   const read = fs.readFileSync;
   let eol = '\n';

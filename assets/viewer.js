@@ -301,19 +301,19 @@
     const stage = element2("div", "cv-stage");
     const help = element2("span", "cv-help");
     viewport2.append(stage, help);
-    const reader = element2("section", "cv-reader");
-    reader.hidden = true;
+    const reader2 = element2("section", "cv-reader");
+    reader2.hidden = true;
     const readerHeader = element2("div", "cv-reader-header");
     const readerTitle = element2("h2", "cv-reader-title");
     const readerClose = button("cv-reader-close", "\xD7", () => {
-      reader.hidden = true;
+      reader2.hidden = true;
       focusSelected();
       focusButton();
     });
     const readerMeta = element2("p", "cv-reader-meta");
     const readerBody = element2("div", "cv-reader-body");
     readerHeader.append(readerTitle, readerClose);
-    reader.append(readerHeader, readerMeta, readerBody);
+    reader2.append(readerHeader, readerMeta, readerBody);
     const dialog = element2("dialog", "cv-dialog");
     const dialogTitle = element2("h2", "cv-dialog-title");
     const dialogClose = button("cv-dialog-close", "\xD7", () => dialog.close());
@@ -333,16 +333,16 @@
     dialog.addEventListener("close", () => focusButton());
     let lastCardClick = { id: null, time: 0 };
     function openDialog(id) {
-      const wasHidden = reader.hidden;
+      const wasHidden = reader2.hidden;
       showDetails2(id);
       dialogTitle.textContent = readerTitle.textContent;
       dialogContent.replaceChildren(readerMeta.cloneNode(true), readerBody.cloneNode(true));
-      reader.hidden = wasHidden;
+      reader2.hidden = wasHidden;
       dialog.showModal();
       dialogContent.scrollTop = 0;
       dialogClose.focus();
     }
-    workspace2.append(directory, viewport2, reader);
+    workspace2.append(directory, viewport2, reader2);
     const legend = element2("section", "cv-legend");
     legend.hidden = true;
     root.append(toolbar, workspace2, legend);
@@ -434,7 +434,7 @@
       }
       if (!descendants.length) showDetails2(id);
       render();
-      if (screen && reader.hidden) {
+      if (screen && reader2.hidden) {
         const point = positions2.get(id);
         if (point) {
           camera.x = screen.x - point.x * camera.scale;
@@ -448,13 +448,13 @@
         toggleDirectory.setAttribute("aria-expanded", "false");
         focusSelected();
       }
-      if (!fromDirectory || !reader.hidden) focusButton();
+      if (!fromDirectory || !reader2.hidden) focusButton();
     }
     function showDetails2(id) {
       const node = nodes.get(id);
       if (!node) return;
-      reader.hidden = false;
-      reader.scrollTop = 0;
+      reader2.hidden = false;
+      reader2.scrollTop = 0;
       readerTitle.textContent = node.title;
       readerMeta.textContent = label(node);
       readerBody.replaceChildren();
@@ -715,7 +715,7 @@
         legend.hidden = true;
         legendButton.setAttribute("aria-expanded", "false");
         legendButton.focus();
-      } else if (!reader.hidden) readerClose.click();
+      } else if (!reader2.hidden) readerClose.click();
       else if (!directory.hidden && matchMedia("(max-width:700px)").matches) directoryClose.click();
     });
     const api = {
@@ -727,7 +727,7 @@
         selected = top;
         expanded.clear();
         expanded.add(top);
-        reader.hidden = true;
+        reader2.hidden = true;
         search.value = "";
         query2 = "";
         matching = null;
@@ -738,12 +738,12 @@
         refreshLabels();
       },
       refresh() {
-        const scroll = reader.scrollTop;
+        const scroll = reader2.scrollTop;
         refreshLabels();
         render();
-        if (!reader.hidden) {
+        if (!reader2.hidden) {
           showDetails2(selected);
-          reader.scrollTop = scroll;
+          reader2.scrollTop = scroll;
         }
       },
       resize() {
@@ -803,6 +803,9 @@
 
   // src/viewer/main.mts
   var { map, icons, brandLogo } = DATA;
+  var reader = DATA.presentation === "reader";
+  if (reader) document.documentElement.dataset.presentation = "reader";
+  if (reader && DATA.readerTheme) document.documentElement.dataset.theme = DATA.readerTheme;
   function required(value) {
     if (value === null || value === void 0) throw new Error("Missing required viewer data or element.");
     return value;
@@ -839,7 +842,8 @@
   } catch {
   }
   var requestedLanguage = new URLSearchParams(location.hash.slice(1)).get("lang");
-  var language = selectLanguage(map.language, availableLanguages2, storedLanguage, requestedLanguage);
+  if (reader && DATA.readerLanguage) availableLanguages2.add(DATA.readerLanguage);
+  var language = selectLanguage(reader ? DATA.readerLanguage ?? map.language : map.language, availableLanguages2, reader && DATA.readerLanguage ? null : storedLanguage, requestedLanguage);
   var isChinese2 = () => isChinese(language);
   var t = (text) => translate(text, language);
   function localized2(item, field) {
@@ -925,7 +929,7 @@ ${localized2(module, "responsibility")}`;
         mark.title = t("\u5F85\u786E\u8BA4");
         mark.setAttribute("aria-label", t("\u5F85\u786E\u8BA4"));
       }
-      for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
+      if (!reader) for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
     }
     for (const { path, relation } of edges) required(path.querySelector("title")).textContent = localized2(relation, "label");
     select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
@@ -969,6 +973,12 @@ ${localized2(module, "responsibility")}`;
     themeButton();
   };
   themeButton();
+  if (reader) window.addEventListener("message", (event) => {
+    if (event.source !== window.parent || event.data?.type !== "birdview:theme" || !["dark", "light"].includes(event.data.theme)) return;
+    document.documentElement.dataset.theme = event.data.theme;
+    themeButton();
+    requestAnimationFrame(reportReaderSize);
+  });
   var rows = [...new Set(map.modules.map((module) => module.layout.row))].sort((a, b) => a - b);
   var columns = [...new Set(map.modules.map((module) => module.layout.column))].sort((a, b) => a - b);
   function trackOffsets(tracks, modules, axis, step) {
@@ -1023,6 +1033,33 @@ ${localized2(module, "responsibility")}`;
     }
     width = offset - 16;
   }
+  function readerLayout() {
+    const available = Math.max(240, Math.min(960, query(".map-scroll").clientWidth - 16));
+    const count = Math.max(1, Math.min(3, Math.floor((available - 64 + 64) / (164 + 64))));
+    const assigned = new Set(map.groups?.flatMap((group) => group.members));
+    const sections = [
+      ...(map.groups ?? []).map((group) => ({ group, modules: map.modules.filter((module) => group.members.includes(module.id)) })),
+      { group: void 0, modules: map.modules.filter((module) => !assigned.has(module.id)) }
+    ];
+    let top = 24;
+    positions.clear();
+    for (const section of sections) {
+      if (!section.modules.length) continue;
+      const members = [...section.modules].sort((a, b) => a.layout.row - b.layout.row || a.layout.column - b.layout.column);
+      const columns2 = Math.min(count, members.length);
+      const rows2 = Math.ceil(members.length / columns2);
+      const margin = columns2 === 1 ? (available - 164) / 2 : 40;
+      const step = columns2 === 1 ? 0 : (available - margin * 2 - 164) / (columns2 - 1);
+      members.forEach((module, index) => positions.set(module.id, { x: margin + index % columns2 * step, y: top + 56 + Math.floor(index / columns2) * 132 }));
+      const sectionHeight = 20 + rows2 * 132;
+      const frame = groupFrames.find((entry) => entry.group.id === section.group?.id)?.label.parentElement;
+      if (frame) Object.assign(frame.style, { left: "16px", top: `${top}px`, width: `${available - 32}px`, height: `${sectionHeight}px` });
+      top += sectionHeight + 48;
+    }
+    width = available;
+    height = top;
+  }
+  if (reader) readerLayout();
   $("map").style.width = `${width}px`;
   $("map").style.height = `${height}px`;
   var zoom = 1;
@@ -1034,7 +1071,7 @@ ${localized2(module, "responsibility")}`;
   function updateZoom() {
     if (fitting) {
       const availableHeight = Math.max(180, Math.min(viewport.clientHeight - 40, window.innerHeight - viewport.getBoundingClientRect().top - 70));
-      const whole = Math.min(1.5, viewport.clientWidth / width, availableHeight / height);
+      const whole = reader ? Math.min(1, viewport.clientWidth / width) : Math.min(1.5, viewport.clientWidth / width, availableHeight / height);
       floored = !fitAll && whole < readableZoom;
       zoom = floored ? readableZoom : whole;
     } else floored = false;
@@ -1081,7 +1118,12 @@ ${localized2(module, "responsibility")}`;
     updateZoom();
     viewport.scrollTo(0, 0);
   };
+  var readerWidth = viewport.clientWidth;
   new ResizeObserver(() => {
+    if (reader && Math.abs(readerWidth - viewport.clientWidth) > 1) {
+      readerWidth = viewport.clientWidth;
+      reflowReader();
+    }
     if (fitting) {
       updateZoom();
       focusChange();
@@ -1135,7 +1177,7 @@ ${localized2(module, "responsibility")}`;
     updateFlow();
   };
   function updateFlow() {
-    const activeModuleId = hoveredModuleId;
+    const activeModuleId = hoveredModuleId ?? (reader && query(".workspace").classList.contains("inspector-open") ? selectedModuleId : void 0);
     const activeButton = activeModuleId ? buttons.get(activeModuleId) : void 0;
     const accent = activeButton ? getComputedStyle(activeButton).getPropertyValue("--node-accent").trim() : "var(--mint)";
     const neighbors = /* @__PURE__ */ new Set([activeModuleId]);
@@ -1158,6 +1200,7 @@ ${localized2(module, "responsibility")}`;
       edge.path.style.display = visible ? "" : "none";
       edge.path.classList.toggle("context-muted", Boolean(activeModuleId) && !relevant);
       edge.label.classList.toggle("context-muted", Boolean(activeModuleId) && !relevant);
+      if (reader) edge.label.classList.toggle("visible", Boolean(activeModuleId) && relevant);
       if (visible) visibleCount++;
       const active = visible && flowToggle.checked && !reducedMotion.matches && !document.hidden && relevant;
       edge.dot.style.display = active ? "" : "none";
@@ -1273,10 +1316,30 @@ ${module.responsibility}`;
       updateFlow();
     };
     $("nodes").append(button);
-    for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
+    if (!reader) for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
     buttons.set(module.id, button);
   }
   var moduleMeta = document.createElement("div");
+  function reflowReader() {
+    readerLayout();
+    Object.assign($("map").style, { width: `${width}px`, height: `${height}px` });
+    $("connections").setAttribute("viewBox", `0 0 ${width} ${height}`);
+    Object.assign($("connections").style, { width: `${width}px`, height: `${height}px` });
+    for (const [id, button] of buttons) {
+      const position = required(positions.get(id));
+      Object.assign(button.style, { left: `${position.x}px`, top: `${position.y}px` });
+    }
+    const routes = routeArchitecture(map.relationships, positions);
+    edges.forEach((edge, index) => {
+      edge.animation?.cancel();
+      edge.animation = void 0;
+      edge.path.setAttribute("d", required(routes[index]).d);
+      const middle = edge.path.getPointAtLength(edge.path.getTotalLength() / 2);
+      edge.label.setAttribute("x", String(middle.x));
+      edge.label.setAttribute("y", String(middle.y - 6));
+    });
+    updateFlow();
+  }
   var roleLegend = document.createElement("div");
   roleLegend.className = "role-legend";
   query(".legend").prepend(roleLegend);
@@ -1303,6 +1366,7 @@ ${module.responsibility}`;
     if (document.getElementById("impact-panel")) syncSidePanel();
     showDetails.setAttribute("aria-expanded", String(open));
     updateConstraints();
+    if (reader) updateFlow();
     if (fitting) updateZoom();
   }
   closeDetails.onclick = () => {
@@ -1368,10 +1432,17 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
   $("actual").replaceChildren($("zoom-value"));
   zoomTools.append($("zoom-out"), $("actual"), $("zoom-in"), $("fit"));
   mapTools.replaceChildren(relationTools, zoomTools, showDetails);
+  if (reader) mapTools.append(languageSelect, $("uncertainty"));
   if (activityEvents.length) {
     element(mapHeading.firstElementChild, HTMLElement).hidden = true;
     mapHeading.prepend($("activity-mode"));
     $("activity-mode").after($("activity-meta"));
+    if (reader) {
+      const views = document.createElement("div");
+      views.className = "reader-views";
+      mapHeading.prepend(views);
+      views.append($("activity-mode"), $("activity-phase"));
+    }
   }
   required(query(".legend").lastElementChild).before(relationCount);
   query(".activity-toolbar", activityPanel).append($("activity-summary"));
@@ -1436,7 +1507,7 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
   impactPanel.id = "impact-panel";
   impactPanel.hidden = true;
   mapPanes.append(impactPanel);
-  var impactOverride;
+  var impactOverride = reader ? false : void 0;
   var impactActive = false;
   var impactNeighborCount = 0;
   var impactDrawerQuery = window.matchMedia("(min-width: 801px) and (max-width: 1679px)");
@@ -1646,7 +1717,16 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
     query("header .simulation").textContent = source;
     const names = (ids) => ids.map((id) => localized2(required(map.modules.find((module) => module.id === id)), "name")).join(", ");
     $("activity-summary").textContent = localized2(event, "reason");
-    query("summary", $("activity-disclosure")).textContent = zh ? "\u8BE6\u60C5" : "Details";
+    const activitySummary = query("summary", $("activity-disclosure"));
+    activitySummary.textContent = zh ? "\u8BE6\u60C5" : "Details";
+    if (reader) {
+      const chevron = document.createElement("span");
+      chevron.className = "activity-chevron";
+      chevron.innerHTML = iconMarkup("chevron-right");
+      const title = document.createElement("span");
+      title.textContent = zh ? `\u6D3B\u52A8\u8BE6\u60C5 \xB7 ${terminalPhase ? 0 : event.targets.length} \u4E2A\u76EE\u6807` : `Activity details \xB7 ${terminalPhase ? 0 : event.targets.length} targets`;
+      activitySummary.replaceChildren(chevron, title);
+    }
     $("activity-phase").textContent = required(phaseNames[event.phase][zh ? 0 : 1]);
     $("activity-phase").dataset.phase = event.phase;
     const chips = $("activity-targets");
@@ -1677,7 +1757,13 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
     }
     const details = $("activity-details");
     details.replaceChildren();
-    const fields = [
+    if (reader) details.append(chips);
+    const fields = reader ? [
+      [zh ? "\u672C\u6B21\u8BF4\u660E" : "Activity summary", localized2(event, "reason")],
+      [zh ? "\u58F0\u660E\u8303\u56F4" : "Declared scope", names(event.scope)],
+      ...event.checks.length ? [[zh ? "\u9A8C\u8BC1\u8BB0\u5F55" : "Checks", event.checks.map((check) => `${check.command}
+${check.status} \xB7 ${localized2(check, "summary")}`).join("\n\n")]] : []
+    ] : [
       // Targets are already shown as chips beside the toggle.
       [zh ? "\u8BA1\u5212\u8303\u56F4" : "Planned scope", names(event.scope)],
       [zh ? "\u672C\u6B65\u9AA4\u6587\u4EF6\uFF08\u58F0\u660E\uFF09" : "Step files (declared)", event.files.join("\n") || "-"],
@@ -1737,7 +1823,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
       edge.path.classList.toggle("impact-edge", boundary);
       edge.path.setAttribute("marker-end", core ? "url(#arrow-change)" : "url(#arrow)");
       edge.label.textContent = localized2(edge.relation, "label");
-      edge.label.classList.toggle("visible", core);
+      edge.label.classList.toggle("visible", core && !reader);
       const middleY = edge.path.getPointAtLength(edge.path.getTotalLength() / 2).y;
       const short = core && edge.label.getComputedTextLength() + 16 > edge.path.getTotalLength();
       edge.label.setAttribute("y", String(short ? middleY - 44 : middleY - 6));
@@ -1756,6 +1842,14 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     } else legend.textContent = source;
     updateZoom();
     focusChange();
+  }
+  function reportReaderSize() {
+    if (!reader || window.parent === window) return;
+    window.parent.postMessage({ type: "birdview:resize", height: Math.ceil(Math.max(document.body.getBoundingClientRect().height, document.body.scrollHeight)) }, "*");
+  }
+  if (reader) {
+    new ResizeObserver(reportReaderSize).observe(document.body);
+    requestAnimationFrame(reportReaderSize);
   }
   var constraintRules = map.constraints || [];
   var constraintPanelOpen = false;

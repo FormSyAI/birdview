@@ -1,7 +1,7 @@
 {
   "schemaVersion": "2",
   "project": "birdview",
-  "revision": "2026-10-08-arch-review-1",
+  "revision": "2026-10-08-arch-review-1-reader-locations",
   "sourceRevision": "71287e5205f0e33ac8564d37293657e6a11c275e",
   "workingTree": {
     "dirty": [
@@ -427,8 +427,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 87,
-            "end": 88
+            "start": 104,
+            "end": 105
           },
           "quote": "    if (path.resolve(input).toLowerCase() === path.resolve(output).toLowerCase()) throw new Error('Input and output must differ.');\n    if (activity && path.resolve(activity).toLowerCase() === path.resolve(output).toLowerCase()) throw new Error('Activity input and output must differ.');",
           "note": "只比 resolve 后的小写路径"
@@ -436,8 +436,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 102,
-            "end": 102
+            "start": 119,
+            "end": 119
           },
           "quote": "      if (!review.architectureBinding || review.architectureBinding.mapId !== architecture.mapId || review.architectureBinding.revision !== architecture.revision) throw new Error('Missing or stale review architecture binding');",
           "note": "评审集成只经 render 路线",
@@ -446,8 +446,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 54,
-            "end": 56
+            "start": 63,
+            "end": 65
           },
           "quote": "if (isMainModule(import.meta.url)) {\n  try {\n    const args = process.argv.slice(2);",
           "note": "交付逻辑全在 CLI 主块里"
@@ -455,8 +455,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 114,
-            "end": 117
+            "start": 131,
+            "end": 134
           },
           "quote": "    const html = renderArchitecture(map, events, options);\n    fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });\n    fs.writeFileSync(output, html);\n    if (reviewHtml) fs.writeFileSync(reviewOutput, reviewHtml);",
           "note": "逐个直接写出，无临时文件"
@@ -473,8 +473,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 89,
-            "end": 91
+            "start": 106,
+            "end": 108
           },
           "quote": "    const events: unknown[] = activity ? fs.readFileSync(activity, 'utf8').split(/\\r?\\n/).filter(line => line.trim()).map((line, i): unknown => {\n      try { return JSON.parse(line); } catch { throw new Error(`Invalid JSON in activity record ${i + 1}.`); }\n    }) : [];",
           "note": "activity 解析与 deliver 同文"
@@ -903,8 +903,8 @@
         {
           "path": "src/render.mts",
           "lines": {
-            "start": 74,
-            "end": 74
+            "start": 91,
+            "end": 91
           },
           "quote": "      constraintCatalog = JSON.parse(fs.readFileSync(file, 'utf8')) as ReviewedConstraintCatalog;",
           "note": "render.mjs 直接类型断言"
