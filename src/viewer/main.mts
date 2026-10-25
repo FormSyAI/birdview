@@ -12,8 +12,14 @@ declare const DATA: {
   constraintFreshness?: ConstraintFreshness;
   constraintView?: { graph: ConstraintGraph; snapshot: string; scope: string; rules: Array<{ id: string; modules: string[] }> };
   reviewHref?: string;
+  presentation?: 'reader';
+  readerLanguage?: 'zh' | 'en';
+  readerTheme?: 'dark' | 'light';
 };
 const { map, icons, brandLogo } = DATA;
+const reader = DATA.presentation === 'reader';
+if (reader) document.documentElement.dataset.presentation = 'reader';
+if (reader && DATA.readerTheme) document.documentElement.dataset.theme = DATA.readerTheme;
 function required<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error('Missing required viewer data or element.');
   return value;
@@ -56,7 +62,8 @@ const availableLanguages = BirdviewI18n.availableLanguages(map);
 let storedLanguage = null;
 try { storedLanguage = localStorage.getItem('birdview-language'); } catch {}
 const requestedLanguage = new URLSearchParams(location.hash.slice(1)).get('lang');
-let language = BirdviewI18n.selectLanguage(map.language, availableLanguages, storedLanguage, requestedLanguage);
+if (reader && DATA.readerLanguage) availableLanguages.add(DATA.readerLanguage);
+let language = BirdviewI18n.selectLanguage(reader ? DATA.readerLanguage ?? map.language : map.language, availableLanguages, reader && DATA.readerLanguage ? null : storedLanguage, requestedLanguage);
 const isChinese = () => BirdviewI18n.isChinese(language);
 const t = (text: string) => BirdviewI18n.translate(text, language);
 function localized(item: { openQuestions: string[]; translations?: Record<string, {openQuestions?: string[]}> }, field: 'openQuestions'): string[];
@@ -136,7 +143,7 @@ function applyLanguage() {
     button.setAttribute('aria-label', `${localized(module, 'name')}${module.status === 'uncertain' ? `, ${t('待确认')}` : ''}`);
     const mark = button.querySelector<HTMLElement>('.uncertain-mark');
     if (mark) { mark.title = t('待确认'); mark.setAttribute('aria-label', t('待确认')); }
-    for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
+    if (!reader) for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
   }
   for (const { path, relation } of edges) required(path.querySelector('title')).textContent = localized(relation, 'label');
   select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
@@ -172,6 +179,14 @@ $('theme').onclick = () => {
   themeButton();
 };
 themeButton();
+// The embedding workbench owns appearance. Accept only a theme value from the
+// direct parent; this channel cannot change graph data or execute actions.
+if (reader) window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data?.type !== 'birdview:theme' || !['dark', 'light'].includes(event.data.theme)) return;
+  document.documentElement.dataset.theme = event.data.theme;
+  themeButton();
+  requestAnimationFrame(reportReaderSize);
+});
 
 // Compact unused grid tracks while preserving authored row/column ordering.
 const rows = [...new Set(map.modules.map((module) => module.layout.row))].sort((a, b) => a - b);
@@ -231,6 +246,33 @@ if (map.groups?.length) {
   }
   width = offset - 16;
 }
+// Keep the native graph, groups and orthogonal connections. Only its coordinates
+// adapt to the host width; authored architecture data is never rewritten.
+function readerLayout() {
+  const available = Math.max(240, Math.min(960, query('.map-scroll').clientWidth - 16));
+  const count = Math.max(1, Math.min(3, Math.floor((available - 64 + 64) / (164 + 64))));
+  const assigned = new Set(map.groups?.flatMap(group => group.members));
+  const sections = [...(map.groups ?? []).map(group => ({ group, modules: map.modules.filter(module => group.members.includes(module.id)) })),
+    { group: undefined, modules: map.modules.filter(module => !assigned.has(module.id)) }];
+  let top = 24;
+  positions.clear();
+  for (const section of sections) {
+    if (!section.modules.length) continue;
+    const members = [...section.modules].sort((a, b) => a.layout.row - b.layout.row || a.layout.column - b.layout.column);
+    const columns = Math.min(count, members.length);
+    const rows = Math.ceil(members.length / columns);
+    const margin = columns === 1 ? (available - 164) / 2 : 40;
+    const step = columns === 1 ? 0 : (available - margin * 2 - 164) / (columns - 1);
+    members.forEach((module, index) => positions.set(module.id, {x: margin + index % columns * step, y: top + 56 + Math.floor(index / columns) * 132}));
+    const sectionHeight = 20 + rows * 132;
+    const frame = groupFrames.find(entry => entry.group.id === section.group?.id)?.label.parentElement;
+    if (frame) Object.assign(frame.style, {left:'16px', top:`${top}px`, width:`${available - 32}px`, height:`${sectionHeight}px`});
+    top += sectionHeight + 48;
+  }
+  width = available;
+  height = top;
+}
+if (reader) readerLayout();
 $('map').style.width = `${width}px`;
 $('map').style.height = `${height}px`;
 let zoom = 1;
@@ -246,7 +288,7 @@ function updateZoom() {
   if (fitting) {
     const availableHeight = Math.max(180, Math.min(viewport.clientHeight - 40, window.innerHeight - viewport.getBoundingClientRect().top - 70));
     // Fit may enlarge small maps so large screens are used, but not past legible-text scale.
-    const whole = Math.min(1.5, viewport.clientWidth / width, availableHeight / height);
+    const whole = reader ? Math.min(1, viewport.clientWidth / width) : Math.min(1.5, viewport.clientWidth / width, availableHeight / height);
     floored = !fitAll && whole < readableZoom;
     zoom = floored ? readableZoom : whole;
   } else floored = false;
@@ -278,7 +320,14 @@ $('zoom-in').onclick = () => { fitting = false; zoom = Math.min(2, zoom + .15); 
 $('zoom-out').onclick = () => { fitting = false; zoom = Math.max(.1, zoom - .15); updateZoom(); };
 $('actual').onclick = () => { fitting = false; zoom = 1; updateZoom(); };
 $('fit').onclick = () => { fitting = true; fitAll = true; updateZoom(); viewport.scrollTo(0, 0); };
-new ResizeObserver(() => { if (fitting) { updateZoom(); focusChange(); } }).observe(viewport);
+let readerWidth = viewport.clientWidth;
+new ResizeObserver(() => {
+  if (reader && Math.abs(readerWidth - viewport.clientWidth) > 1) {
+    readerWidth = viewport.clientWidth;
+    reflowReader();
+  }
+  if (fitting) { updateZoom(); focusChange(); }
+}).observe(viewport);
 window.addEventListener('resize', () => { if (fitting) updateZoom(); });
 updateZoom();
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -323,7 +372,7 @@ relationCount.setAttribute('aria-live', 'polite');
 query('.map-tools').prepend(relationView, relationCount);
 relationView.onchange = () => { hoveredModuleId = undefined; updateFlow(); };
 function updateFlow() {
-  const activeModuleId = hoveredModuleId;
+  const activeModuleId = hoveredModuleId ?? (reader && query('.workspace').classList.contains('inspector-open') ? selectedModuleId : undefined);
   const activeButton = activeModuleId ? buttons.get(activeModuleId) : undefined;
   const accent = activeButton ? getComputedStyle(activeButton).getPropertyValue('--node-accent').trim() : 'var(--mint)';
   const neighbors = new Set([activeModuleId]);
@@ -345,6 +394,7 @@ function updateFlow() {
     edge.path.style.display = visible ? '' : 'none';
     edge.path.classList.toggle('context-muted', Boolean(activeModuleId) && !relevant);
     edge.label.classList.toggle('context-muted', Boolean(activeModuleId) && !relevant);
+    if (reader) edge.label.classList.toggle('visible', Boolean(activeModuleId) && relevant);
     if (visible) visibleCount++;
     const active = visible && flowToggle.checked && !reducedMotion.matches && !document.hidden && relevant;
     edge.dot.style.display = active ? '' : 'none';
@@ -461,10 +511,30 @@ for (const module of map.modules) {
     updateFlow();
   };
   $('nodes').append(button);
-  for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
+  if (!reader) for (let size = 13; size > 10 && name.scrollHeight > name.clientHeight; size--) name.style.fontSize = `${size - 1}px`;
   buttons.set(module.id, button);
 }
 const moduleMeta = document.createElement('div');
+function reflowReader() {
+  readerLayout();
+  Object.assign($('map').style, {width:`${width}px`, height:`${height}px`});
+  $('connections').setAttribute('viewBox', `0 0 ${width} ${height}`);
+  Object.assign($('connections').style, {width:`${width}px`, height:`${height}px`});
+  for (const [id, button] of buttons) {
+    const position = required(positions.get(id));
+    Object.assign(button.style, {left:`${position.x}px`, top:`${position.y}px`});
+  }
+  const routes = routeArchitecture(map.relationships, positions);
+  edges.forEach((edge, index) => {
+    edge.animation?.cancel();
+    edge.animation = undefined;
+    edge.path.setAttribute('d', required(routes[index]).d);
+    const middle = edge.path.getPointAtLength(edge.path.getTotalLength() / 2);
+    edge.label.setAttribute('x', String(middle.x));
+    edge.label.setAttribute('y', String(middle.y - 6));
+  });
+  updateFlow();
+}
 const roleLegend = document.createElement('div');
 roleLegend.className = 'role-legend';
 query('.legend').prepend(roleLegend);
@@ -488,6 +558,7 @@ function setInspector(open: boolean) {
   if (document.getElementById('impact-panel')) syncSidePanel();
   showDetails.setAttribute('aria-expanded', String(open));
   updateConstraints();
+  if (reader) updateFlow();
   if (fitting) updateZoom();
 }
 closeDetails.onclick = () => { setInspector(false); showDetails.focus(); };
@@ -547,11 +618,18 @@ zoomTools.className = 'zoom-tools';
 $('actual').replaceChildren($('zoom-value'));
 zoomTools.append($('zoom-out'), $('actual'), $('zoom-in'), $('fit'));
 mapTools.replaceChildren(relationTools, zoomTools, showDetails);
+if (reader) mapTools.append(languageSelect, $('uncertainty'));
 if (activityEvents.length) {
   element(mapHeading.firstElementChild, HTMLElement).hidden = true;
   mapHeading.prepend($('activity-mode'));
   // Targets share the view-toggle row instead of taking a row of their own.
   $('activity-mode').after($('activity-meta'));
+  if (reader) {
+    const views = document.createElement('div');
+    views.className = 'reader-views';
+    mapHeading.prepend(views);
+    views.append($('activity-mode'), $('activity-phase'));
+  }
 }
 required(query('.legend').lastElementChild).before(relationCount);
 query('.activity-toolbar', activityPanel).append($('activity-summary'));
@@ -604,7 +682,7 @@ mapPanes.append(impactPanel);
 // Outside-scope impact is a layer of the changes view. It defaults on for
 // planned steps, when the reader confirms scope, and off while work proceeds;
 // once the reader flips it, their choice holds across steps.
-let impactOverride: boolean | undefined;
+let impactOverride: boolean | undefined = reader ? false : undefined;
 let impactActive = false;
 let impactNeighborCount = 0;
 // Between phone and wide layouts a fixed column would shrink the map below
@@ -805,7 +883,16 @@ function updateActivity() {
   query('header .simulation').textContent = source;
   const names = (ids: string[]) => ids.map(id => localized(required(map.modules.find(module => module.id === id)), 'name')).join(', ');
   $('activity-summary').textContent = localized(event, 'reason');
-  query('summary', $('activity-disclosure')).textContent = zh ? '详情' : 'Details';
+  const activitySummary = query('summary', $('activity-disclosure'));
+  activitySummary.textContent = zh ? '详情' : 'Details';
+  if (reader) {
+    const chevron = document.createElement('span');
+    chevron.className = 'activity-chevron';
+    chevron.innerHTML = iconMarkup('chevron-right');
+    const title = document.createElement('span');
+    title.textContent = zh ? `活动详情 · ${terminalPhase ? 0 : event.targets.length} 个目标` : `Activity details · ${terminalPhase ? 0 : event.targets.length} targets`;
+    activitySummary.replaceChildren(chevron, title);
+  }
   $('activity-phase').textContent = required(phaseNames[event.phase][zh ? 0 : 1]);
   $('activity-phase').dataset.phase = event.phase;
   // Target chips name the modules in reach of this step and link back to the map.
@@ -828,7 +915,12 @@ function updateActivity() {
   }
   const details = $('activity-details');
   details.replaceChildren();
-  const fields: [string, string][] = [
+  if (reader) details.append(chips);
+  const fields: [string, string][] = reader ? [
+    [zh ? '本次说明' : 'Activity summary', localized(event, 'reason')],
+    [zh ? '声明范围' : 'Declared scope', names(event.scope)],
+    ...(event.checks.length ? [[zh ? '验证记录' : 'Checks', event.checks.map(check => `${check.command}\n${check.status} · ${localized(check, 'summary')}`).join('\n\n')] as [string, string]] : [])
+  ] : [
     // Targets are already shown as chips beside the toggle.
     [zh ? '计划范围' : 'Planned scope', names(event.scope)],
     [zh ? '本步骤文件（声明）' : 'Step files (declared)', event.files.join('\n') || '-'],
@@ -891,7 +983,7 @@ function updateActivity() {
     edge.path.classList.toggle('impact-edge', boundary);
     edge.path.setAttribute('marker-end', core ? 'url(#arrow-change)' : 'url(#arrow)');
     edge.label.textContent = localized(edge.relation, 'label');
-    edge.label.classList.toggle('visible', core);
+    edge.label.classList.toggle('visible', core && !reader);
     // A label longer than its edge would sit under the nodes; lift it into the
     // row gap above them instead.
     const middleY = edge.path.getPointAtLength(edge.path.getTotalLength() / 2).y;
@@ -912,6 +1004,17 @@ function updateActivity() {
   } else legend.textContent = source;
   updateZoom();
   focusChange();
+}
+
+// The host expands the iframe to the content, so the page has one vertical
+// scrollbar. Report body geometry, never viewport height (which would feed back).
+function reportReaderSize() {
+  if (!reader || window.parent === window) return;
+  window.parent.postMessage({ type: 'birdview:resize', height: Math.ceil(Math.max(document.body.getBoundingClientRect().height, document.body.scrollHeight)) }, '*');
+}
+if (reader) {
+  new ResizeObserver(reportReaderSize).observe(document.body);
+  requestAnimationFrame(reportReaderSize);
 }
 
 const constraintRules = map.constraints || [];

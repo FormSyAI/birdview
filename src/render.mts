@@ -10,6 +10,10 @@ import { renderReview, validateReview, verifyReviewQuotes } from './render-revie
 import type { ConstraintFreshness, ConstraintGraph, ReviewedConstraintCatalog } from './constraint-types.mjs';
 
 export interface RenderOptions {
+  /** Reader adapts the native graph to an embedded FormSy surface. */
+  presentation?: 'explorer' | 'reader';
+  readerLanguage?: 'zh' | 'en';
+  readerTheme?: 'dark' | 'light';
   simulation?: boolean;
   repository?: string;
   constraintCatalog?: ReviewedConstraintCatalog;
@@ -20,7 +24,11 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = (file: string): string => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const dataUrl = (file: string, type: string): string => `data:${type};base64,${fs.readFileSync(path.join(root, file)).toString('base64')}`;
 
-export function renderArchitecture(map: unknown, events: readonly unknown[] = [], { simulation = false, repository, constraintCatalog, reviewHref }: RenderOptions = {}): string {
+export function renderArchitecture(map: unknown, events: readonly unknown[] = [], { simulation = false, repository, constraintCatalog, reviewHref, presentation = 'explorer', readerLanguage, readerTheme }: RenderOptions = {}): string {
+  if (presentation !== 'explorer' && presentation !== 'reader') throw new Error('Unknown presentation; use explorer or reader.');
+  if (presentation === 'reader' && (constraintCatalog || reviewHref)) throw new Error('Reader supports architecture/activity data; use explorer for a constraint catalog or review navigation.');
+  if (readerLanguage !== undefined && readerLanguage !== 'zh' && readerLanguage !== 'en') throw new Error('Reader language must be zh or en.');
+  if (readerTheme !== undefined && readerTheme !== 'dark' && readerTheme !== 'light') throw new Error('Reader theme must be dark or light.');
   const result = validate(map, events);
   if (!result.ok) throw new Error(JSON.stringify(result.errors));
   const architecture = map as Architecture;
@@ -39,12 +47,13 @@ export function renderArchitecture(map: unknown, events: readonly unknown[] = []
     constraintView = { graph: buildConstraintGraph(constraintCatalog), snapshot: constraintCatalog.project.revision,
       scope: constraintCatalog.ruleReview.scope, rules: constraintCatalog.rules.map(({ id, modules = [] }) => ({ id, modules })) };
   }
-  const data = JSON.stringify({ map: architecture, icons, events, simulation, brandLogo, constraintFreshness, constraintView, ...(reviewHref ? { reviewHref } : {}) }).replace(/</g, '\\u003c');
+  const data = JSON.stringify({ map: architecture, icons, events, simulation, brandLogo, constraintFreshness, constraintView, ...(reviewHref ? { reviewHref } : {}), ...(presentation === 'reader' ? {presentation, readerLanguage, readerTheme} : {}) }).replace(/</g, '\\u003c');
   return read('assets/architecture.html')
     .replace('/* BIRDVIEW_THEME */', () => read('assets/theme.js'))
     .replace('<head>', () => `<head>\n<!--\n${read('LICENSE')}\n${read('THIRD_PARTY_NOTICES')}\n-->`)
     .replace('/* BIRDVIEW_FAVICON */', () => dataUrl('assets/brand/favicon-32.png', 'image/png'))
     .replace('/* BIRDVIEW_CSS */', () => read('assets/demo.css'))
+    .replace('/* BIRDVIEW_HOST_CSS */', () => presentation === 'reader' ? read('assets/reader.css') : '')
     .replace('/* BIRDVIEW_DATA */', () => `const DATA = ${data};`)
     .replace('/* BIRDVIEW_JS */', () => read('assets/viewer.js'))
     .replace('/* BIRDVIEW_GUIDE_CSS */', () => read('assets/architecture-guide.css'))
@@ -54,6 +63,14 @@ export function renderArchitecture(map: unknown, events: readonly unknown[] = []
 if (isMainModule(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
+    let presentation: RenderOptions['presentation'] = 'explorer';
+    const presentationIndex = args.indexOf('--presentation');
+    if (presentationIndex !== -1) {
+      const value = args[presentationIndex + 1];
+      if (value !== 'reader' && value !== 'explorer') throw new Error('--presentation requires reader or explorer.');
+      presentation = value;
+      args.splice(presentationIndex, 2);
+    }
     let review: unknown;
     let reviewInput: string | undefined;
     const reviewIndex = args.indexOf('--review');
@@ -110,7 +127,7 @@ if (isMainModule(import.meta.url)) {
       const views = { architectureHref: encodeURIComponent(path.basename(output)), constraints: !!constraintCatalog };
       reviewHtml = renderReview(review, { views, ...(repository ? { quotes: verifyReviewQuotes(review, repository) } : {}) });
     }
-    const options: RenderOptions = { simulation, ...(reviewHtml ? { reviewHref: encodeURIComponent(path.basename(reviewOutput)) } : {}), ...(repository ? { repository } : {}), ...(constraintCatalog ? { constraintCatalog } : {}) };
+    const options: RenderOptions = { simulation, presentation, ...(reviewHtml ? { reviewHref: encodeURIComponent(path.basename(reviewOutput)) } : {}), ...(repository ? { repository } : {}), ...(constraintCatalog ? { constraintCatalog } : {}) };
     const html = renderArchitecture(map, events, options);
     fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
     fs.writeFileSync(output, html);
