@@ -7,12 +7,21 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.evaluate(() => {
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options?: boolean | ScrollIntoViewOptions) {
+      Object.assign(window, {__reviewScroll: options});
+      Reflect.apply(original, this, [options]);
+    };
+  });
   const r = JSON.parse(fs.readFileSync('examples/review.json', 'utf8')) as ArchitectureReview;
   assert.ok(r.candidates.length >= 2, 'the example shows several sheets');
   r.recommendation = { candidate: r.candidates[1]!.id, reason: '用于测试跳转。' };
   const shared = r.candidates[0]!.before.nodes.find(n => r.candidates[0]!.after.nodes.some(a => a.id === n.id && a.kind !== 'deep'))!.id;
   const quotes = verifyReviewQuotes(r, '.');
   for (const language of ['zh', 'en'] as const) {
+    const reducedMotion = language === 'zh' ? 'reduce' : 'no-preference';
+    await page.emulateMedia({reducedMotion});
     r.language = language;
     await page.setContent(renderReview(r, { quotes }));
     assert.equal(await page.locator('.sheet-page:visible').count(), 1);
@@ -27,6 +36,7 @@ try {
     assert.equal(await sheet.locator('.node.linked').count(), 2);
     // Recommendation and tabs switch sheets.
     await page.locator('.recommend [data-goto]').click();
+    assert.equal(await page.evaluate(() => (window as unknown as {__reviewScroll: ScrollIntoViewOptions}).__reviewScroll.behavior), reducedMotion === 'reduce' ? 'instant' : 'auto');
     assert.equal(await page.locator('.sheet-page[data-sheet="1"]').isVisible(), true);
     assert.equal(await page.locator('.tabs [data-goto="1"]').getAttribute('aria-pressed'), 'true');
     await page.locator('.tabs [data-goto="0"]').click();

@@ -76,6 +76,21 @@ test('relationships require explicit semantics and visibility; reject retired fi
 test('empty routing input produces no paths', () => {
   assert.deepEqual(routeArchitecture([], new Map()), []);
 });
+test('reader routes use measured widths and heights instead of crossing long titles', () => {
+  const positions = new Map([['a',{x:32,y:40,w:264,h:180}],['blocker',{x:344,y:40,w:220,h:160}],['b',{x:32,y:280,w:264,h:88}]]);
+  const route = present(routeArchitecture([{from:'a',to:'b'}], positions)[0]);
+  assert.equal(present(route.points[0])[1], 220);
+  assert.equal(present(route.points.at(-1))[1], 280);
+  for (let index = 1; index < route.points.length; index++) {
+    const a = present(route.points[index - 1]), b = present(route.points[index]);
+    for (const [id, box] of positions) {
+      const intersects = a[0] === b[0]
+        ? a[0] > box.x && a[0] < box.x + box.w && Math.max(a[1], b[1]) > box.y && Math.min(a[1], b[1]) < box.y + box.h
+        : a[1] > box.y && a[1] < box.y + box.h && Math.max(a[0], b[0]) > box.x && Math.min(a[0], b[0]) < box.x + box.w;
+      assert.equal(intersects, false, `route crosses ${id}`);
+    }
+  }
+});
 
 test('routes avoid intervening cards and spread shared ports, including reverse and self edges', () => {
   const positions = new Map([['a',{x:28,y:30}],['blocker',{x:232,y:30}],['b',{x:436,y:30}],['c',{x:232,y:158}]]);

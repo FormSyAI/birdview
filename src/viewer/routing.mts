@@ -1,5 +1,5 @@
 export type Point = [number, number];
-export interface Position { x: number; y: number }
+export interface Position { x: number; y: number; w?: number; h?: number }
 export interface Connection { from: string; to: string }
 export interface Route { points: Point[]; d: string }
 interface Box extends Position { id: string; w: number; h: number }
@@ -16,7 +16,7 @@ function requiredAt<T>(values: readonly T[], index: number): T {
 // Orthogonal routing on the free corridors around module rectangles.
 export function routeArchitecture(relationships: readonly Connection[], positions: ReadonlyMap<string, Position>): Route[] {
   const gap = 10;
-  const boxes = [...positions].map(([id, p]) => ({ id, x: p.x, y: p.y, w: 164, h: 72 }));
+  const boxes = [...positions].map(([id, p]) => ({ id, x: p.x, y: p.y, w: p.w ?? 164, h: p.h ?? 72 }));
   const boxById = new Map(boxes.map(b => [b.id, b]));
   const obstacles = boxes.map(b => ({ x: b.x - gap, y: b.y - gap, w: b.w + gap * 2, h: b.h + gap * 2 }));
   const ports = new Map<string, Port[]>();
@@ -64,12 +64,16 @@ export function routeArchitecture(relationships: readonly Connection[], position
   const used: [Point, Point][] = [];
   // Include the middle of each free row/column corridor, rather than routing
   // exclusively along card edges. Long connections can use the outside lane.
-  const centers = (values: number[], size: number) => {
-    const sorted = [...new Set(values)].sort((a,b) => a-b);
-    return sorted.slice(1).map((value,i) => (requiredAt(sorted, i) + size + value) / 2);
+  const centers = (axis: 'x' | 'y', size: 'w' | 'h') => {
+    const sorted = [...new Set(boxes.map(box => box[axis]))].sort((a,b) => a-b);
+    return sorted.slice(1).flatMap((value, i) => {
+      const previous = requiredAt(sorted, i);
+      const end = Math.max(...boxes.filter(box => box[axis] === previous).map(box => box[axis] + box[size]));
+      return end < value ? [(end + value) / 2] : [];
+    });
   };
-  const lanesX = centers(boxes.map(b => b.x), 164);
-  const lanesY = centers(boxes.map(b => b.y), 72);
+  const lanesX = centers('x', 'w');
+  const lanesY = centers('y', 'h');
   const outerY = Math.max(...boxes.map(b => b.y + b.h)) + 24;
   return routes.map(({ start, end, relation }) => {
     const startStub = start.stub, endStub = end.stub, startPoint = start.point, endPoint = end.point;

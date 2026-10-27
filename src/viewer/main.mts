@@ -1,5 +1,5 @@
 import type { Architecture, ActivityEvent, Module, Relationship, Constraint } from '../contracts/models.mjs';
-import { routeArchitecture } from './routing.mjs';
+import { routeArchitecture, type Position } from './routing.mjs';
 import * as BirdviewI18n from './i18n.mjs';
 import { mountConstraintCanvas, type ConstraintCanvas } from './constraint-canvas.mjs';
 import type { ConstraintFreshness, ConstraintGraph } from '../constraint-types.mjs';
@@ -18,6 +18,8 @@ declare const DATA: {
 };
 const { map, icons, brandLogo } = DATA;
 const reader = DATA.presentation === 'reader';
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const scrollBehavior = (): ScrollBehavior => reducedMotion.matches ? 'instant' : 'auto';
 if (reader) document.documentElement.dataset.presentation = 'reader';
 if (reader && DATA.readerTheme) document.documentElement.dataset.theme = DATA.readerTheme;
 function required<T>(value: T | null | undefined): T {
@@ -147,6 +149,8 @@ function applyLanguage() {
   }
   for (const { path, relation } of edges) required(path.querySelector('title')).textContent = localized(relation, 'label');
   select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
+  if (reader) reflowReader();
+  syncFullscreen();
   if (fitting) updateZoom();
 }
 languageSelect.onchange = () => {
@@ -209,7 +213,7 @@ function trackOffsets(tracks: number[], modules: Module[], axis: 'row' | 'column
 }
 const columnOffsets = trackOffsets(columns, map.modules, 'column', 220);
 const rowOffsets = trackOffsets(rows, map.modules, 'row', 140);
-const positions = new Map(map.modules.map(module => [module.id, { x: 28 + required(columnOffsets[columns.indexOf(module.layout.column)]), y: 30 + required(rowOffsets[rows.indexOf(module.layout.row)]) }]));
+const positions = new Map<string, Position>(map.modules.map(module => [module.id, { x: 28 + required(columnOffsets[columns.indexOf(module.layout.column)]), y: 30 + required(rowOffsets[rows.indexOf(module.layout.row)]) }]));
 let width = Math.max(300, required(columnOffsets.at(-1)) + 220);
 let height = Math.max(220, required(rowOffsets.at(-1)) + 140);
 const groupFrames: {label: HTMLSpanElement; group: Group}[] = [];
@@ -250,7 +254,7 @@ if (map.groups?.length) {
 // adapt to the host width; authored architecture data is never rewritten.
 function readerLayout() {
   const available = Math.max(240, Math.min(960, query('.map-scroll').clientWidth - 16));
-  const count = Math.max(1, Math.min(3, Math.floor((available - 64 + 64) / (164 + 64))));
+  const count = Math.max(1, Math.min(3, Math.floor((available - 32 + 48) / (196 + 48))));
   const assigned = new Set(map.groups?.flatMap(group => group.members));
   const sections = [...(map.groups ?? []).map(group => ({ group, modules: map.modules.filter(module => group.members.includes(module.id)) })),
     { group: undefined, modules: map.modules.filter(module => !assigned.has(module.id)) }];
@@ -260,11 +264,19 @@ function readerLayout() {
     if (!section.modules.length) continue;
     const members = [...section.modules].sort((a, b) => a.layout.row - b.layout.row || a.layout.column - b.layout.column);
     const columns = Math.min(count, members.length);
-    const rows = Math.ceil(members.length / columns);
-    const margin = columns === 1 ? (available - 164) / 2 : 40;
-    const step = columns === 1 ? 0 : (available - margin * 2 - 164) / (columns - 1);
-    members.forEach((module, index) => positions.set(module.id, {x: margin + index % columns * step, y: top + 56 + Math.floor(index / columns) * 132}));
-    const sectionHeight = 20 + rows * 132;
+    const nodeWidth = Math.min(264, (available - 64 - (columns - 1) * 48) / columns);
+    const margin = (available - (nodeWidth * columns + (columns - 1) * 48)) / 2;
+    let rowTop = top + 56;
+    for (let start = 0; start < members.length; start += columns) {
+      const row = members.slice(start, start + columns).map(module => {
+        const button = document.querySelector<HTMLButtonElement>(`[data-module="${CSS.escape(module.id)}"]`);
+        if (button) button.style.width = `${nodeWidth}px`;
+        return {module, h: button?.offsetHeight || 88};
+      });
+      row.forEach(({module, h}, column) => positions.set(module.id, {x: margin + column * (nodeWidth + 48), y: rowTop, w: nodeWidth, h}));
+      rowTop += Math.max(...row.map(item => item.h)) + 60;
+    }
+    const sectionHeight = rowTop - top - 28;
     const frame = groupFrames.find(entry => entry.group.id === section.group?.id)?.label.parentElement;
     if (frame) Object.assign(frame.style, {left:'16px', top:`${top}px`, width:`${available - 32}px`, height:`${sectionHeight}px`});
     top += sectionHeight + 48;
@@ -313,20 +325,20 @@ function focusChange() {
   const bottom = boxes.length ? Math.max(...boxes.map(box => box.offsetTop + box.offsetHeight)) : 0;
   const stage = $('map-stage').getBoundingClientRect(), frame = viewport.getBoundingClientRect();
   const stageX = stage.left - frame.left + viewport.scrollLeft, stageY = stage.top - frame.top + viewport.scrollTop;
-  viewport.scrollTo(stageX + (left + right) / 2 * zoom - viewport.clientWidth / 2, boxes.length ? stageY + (top + bottom) / 2 * zoom - viewport.clientHeight / 2 : 0);
+  viewport.scrollTo({left: stageX + (left + right) / 2 * zoom - viewport.clientWidth / 2, top: boxes.length ? stageY + (top + bottom) / 2 * zoom - viewport.clientHeight / 2 : 0, behavior: scrollBehavior()});
 }
 for (const [id, icon] of Object.entries({ 'zoom-in': 'zoom-in', 'zoom-out': 'zoom-out', fit: 'maximize', actual: 'scan' })) $(id).innerHTML = icons[icon] || '';
 $('zoom-in').onclick = () => { fitting = false; zoom = Math.min(2, zoom + .15); updateZoom(); };
 $('zoom-out').onclick = () => { fitting = false; zoom = Math.max(.1, zoom - .15); updateZoom(); };
 $('actual').onclick = () => { fitting = false; zoom = 1; updateZoom(); };
-$('fit').onclick = () => { fitting = true; fitAll = true; updateZoom(); viewport.scrollTo(0, 0); };
+$('fit').onclick = () => { fitting = true; fitAll = true; updateZoom(); viewport.scrollTo({left: 0, top: 0, behavior: scrollBehavior()}); };
 let readerWidth = viewport.clientWidth;
 new ResizeObserver(() => {
   if (reader && Math.abs(readerWidth - viewport.clientWidth) > 1) {
     readerWidth = viewport.clientWidth;
     reflowReader();
   }
-  if (fitting) { updateZoom(); focusChange(); }
+  if (fitting) updateZoom();
 }).observe(viewport);
 window.addEventListener('resize', () => { if (fitting) updateZoom(); });
 updateZoom();
@@ -351,7 +363,6 @@ $('connections').append(defs);
 const edges: Edge[] = [];
 let selectedModuleId: string | undefined;
 let hoveredModuleId: string | undefined;
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const flowLabel = document.createElement('label');
 flowLabel.className = 'flow-toggle';
 flowLabel.title = '关系方向动画，不代表实时数据传输';
@@ -394,7 +405,9 @@ function updateFlow() {
     edge.path.style.display = visible ? '' : 'none';
     edge.path.classList.toggle('context-muted', Boolean(activeModuleId) && !relevant);
     edge.label.classList.toggle('context-muted', Boolean(activeModuleId) && !relevant);
-    if (reader) edge.label.classList.toggle('visible', Boolean(activeModuleId) && relevant);
+    // Full relationship wording stays in the inspector. Painting every label
+    // around a long/dense reader node makes the narrow map unreadable.
+    if (reader) edge.label.classList.remove('visible');
     if (visible) visibleCount++;
     const active = visible && flowToggle.checked && !reducedMotion.matches && !document.hidden && relevant;
     edge.dot.style.display = active ? '' : 'none';
@@ -619,6 +632,47 @@ $('actual').replaceChildren($('zoom-value'));
 zoomTools.append($('zoom-out'), $('actual'), $('zoom-in'), $('fit'));
 mapTools.replaceChildren(relationTools, zoomTools, showDetails);
 if (reader) mapTools.append(languageSelect, $('uncertainty'));
+// The browser owns fullscreen state. A rejected request never changes the label,
+// selection, mode or focus; Escape and ancestor changes synchronize via the event.
+const fullscreenButton = document.createElement('button');
+fullscreenButton.id = 'fullscreen';
+fullscreenButton.type = 'button';
+fullscreenButton.hidden = reader && window.parent !== window;
+const fullscreenStatus = document.createElement('span');
+fullscreenStatus.id = 'fullscreen-status';
+fullscreenStatus.setAttribute('role', 'status');
+fullscreenStatus.hidden = true;
+mapTools.append(fullscreenButton);
+mapHeading.append(fullscreenStatus);
+let fullscreenPending = false;
+function syncFullscreen() {
+  const active = document.fullscreenElement === document.documentElement;
+  fullscreenButton.textContent = isChinese() ? (active ? '退出全屏' : '全屏查看') : (active ? 'Exit fullscreen' : 'Fullscreen');
+  fullscreenButton.setAttribute('aria-pressed', String(active));
+  fullscreenButton.setAttribute('aria-busy', String(fullscreenPending));
+}
+fullscreenButton.onclick = async () => {
+  if (fullscreenPending) return;
+  fullscreenPending = true;
+  fullscreenStatus.hidden = true;
+  syncFullscreen();
+  try {
+    if (document.fullscreenElement === document.documentElement) await document.exitFullscreen();
+    else {
+      if (!document.documentElement.requestFullscreen) throw new Error('Fullscreen unavailable');
+      await document.documentElement.requestFullscreen();
+      if (document.fullscreenElement !== document.documentElement) throw new Error('Fullscreen not entered');
+    }
+  } catch {
+    fullscreenStatus.textContent = isChinese() ? '全屏切换失败，请重试。' : 'Fullscreen failed. Please try again.';
+    fullscreenStatus.hidden = false;
+  } finally {
+    fullscreenPending = false;
+    syncFullscreen();
+  }
+};
+document.addEventListener('fullscreenchange', syncFullscreen);
+syncFullscreen();
 if (activityEvents.length) {
   element(mapHeading.firstElementChild, HTMLElement).hidden = true;
   mapHeading.prepend($('activity-mode'));
@@ -1439,8 +1493,8 @@ function finishGuide() {
   updateZoom();
   fitting = saved.fitting;
   fitAll = saved.fitAll;
-  for (const [el, x, y] of saved.panes) el.scrollTo(x, y);
-  window.scrollTo(saved.x, saved.y);
+  for (const [el, x, y] of saved.panes) el.scrollTo({left: x, top: y, behavior: scrollBehavior()});
+  window.scrollTo({left: saved.x, top: saved.y, behavior: scrollBehavior()});
   (saved.focus instanceof HTMLElement && saved.focus.isConnected && !saved.focus.closest('#guide-invite') ? saved.focus : guideLaunch).focus({ preventScroll: true });
 }
 guideLaunch.onclick = $('guide-start').onclick = startGuide;
