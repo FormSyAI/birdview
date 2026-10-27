@@ -310,6 +310,12 @@ SOFTWARE.
     #impact-drawer-tab{position:absolute;top:0.5714rem;right:0;z-index:7;width:auto;height:auto;min-height:0;padding:0.4286rem 0.8571rem;border:1px solid var(--impact);border-radius:71.3571rem;background:color-mix(in srgb,var(--impact) 16%,#1b1f20);color:inherit;font-size:0.8571rem;font-weight:600;white-space:nowrap;cursor:pointer}[data-theme="light"] #impact-drawer-tab{background:color-mix(in srgb,var(--impact) 12%,#fff)}#impact-drawer-tab[hidden]{display:none}
     /* Short screens: give the map the vertical space the chrome does not need. */
     @media(max-height:820px) and (min-width:801px){header{height:3.7143rem}main{padding-top:0.7143rem}.show-activity-context .activity-panel{padding:0.2857rem 0 0.4286rem}.map-heading{padding-top:0.4286rem;padding-bottom:0.4286rem}.map-panes .map-scroll{padding-top:0.5714rem;padding-bottom:0.5714rem}}
+    #fullscreen{width:auto;height:auto;min-height:32px;padding:6px 10px;white-space:nowrap;font-size:12px}
+    #fullscreen[hidden]{display:none}
+    #fullscreen-status{flex-basis:100%;grid-column:1 / -1;font-size:13px;color:var(--muted)}
+    :root:fullscreen{overflow:auto;background:var(--reader-surface,var(--bg,#202626))}
+    :root:fullscreen .map-heading{position:sticky;top:0;z-index:8;background:var(--reader-surface,#202626)}
+    :root[data-theme="light"]:fullscreen .map-heading{background:var(--reader-surface,#fafbfa)}
 
   </style>
 </head>
@@ -338,7 +344,7 @@ SOFTWARE.
   }
   function routeArchitecture(relationships, positions2) {
     const gap = 10;
-    const boxes = [...positions2].map(([id, p]) => ({ id, x: p.x, y: p.y, w: 164, h: 72 }));
+    const boxes = [...positions2].map(([id, p]) => ({ id, x: p.x, y: p.y, w: p.w ?? 164, h: p.h ?? 72 }));
     const boxById = new Map(boxes.map((b) => [b.id, b]));
     const obstacles = boxes.map((b) => ({ x: b.x - gap, y: b.y - gap, w: b.w + gap * 2, h: b.h + gap * 2 }));
     const ports = /* @__PURE__ */ new Map();
@@ -379,12 +385,16 @@ SOFTWARE.
       });
     }
     const used = [];
-    const centers = (values, size) => {
-      const sorted = [...new Set(values)].sort((a, b) => a - b);
-      return sorted.slice(1).map((value, i) => (requiredAt(sorted, i) + size + value) / 2);
+    const centers = (axis, size) => {
+      const sorted = [...new Set(boxes.map((box) => box[axis]))].sort((a, b) => a - b);
+      return sorted.slice(1).flatMap((value, i) => {
+        const previous = requiredAt(sorted, i);
+        const end = Math.max(...boxes.filter((box) => box[axis] === previous).map((box) => box[axis] + box[size]));
+        return end < value ? [(end + value) / 2] : [];
+      });
     };
-    const lanesX = centers(boxes.map((b) => b.x), 164);
-    const lanesY = centers(boxes.map((b) => b.y), 72);
+    const lanesX = centers("x", "w");
+    const lanesY = centers("y", "h");
     const outerY = Math.max(...boxes.map((b) => b.y + b.h)) + 24;
     return routes.map(({ start, end, relation }) => {
       const startStub = start.stub, endStub = end.stub, startPoint = start.point, endPoint = end.point;
@@ -1127,6 +1137,8 @@ SOFTWARE.
   // src/viewer/main.mts
   var { map, icons, brandLogo } = DATA;
   var reader = DATA.presentation === "reader";
+  var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  var scrollBehavior = () => reducedMotion.matches ? "instant" : "auto";
   if (reader) document.documentElement.dataset.presentation = "reader";
   if (reader && DATA.readerTheme) document.documentElement.dataset.theme = DATA.readerTheme;
   function required(value) {
@@ -1256,6 +1268,8 @@ ${localized2(module, "responsibility")}`;
     }
     for (const { path, relation } of edges) required(path.querySelector("title")).textContent = localized2(relation, "label");
     select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
+    if (reader) reflowReader();
+    syncFullscreen();
     if (fitting) updateZoom();
   }
   languageSelect.onchange = () => {
@@ -1358,7 +1372,7 @@ ${localized2(module, "responsibility")}`;
   }
   function readerLayout() {
     const available = Math.max(240, Math.min(960, query(".map-scroll").clientWidth - 16));
-    const count = Math.max(1, Math.min(3, Math.floor((available - 64 + 64) / (164 + 64))));
+    const count = Math.max(1, Math.min(3, Math.floor((available - 32 + 48) / (196 + 48))));
     const assigned = new Set(map.groups?.flatMap((group) => group.members));
     const sections = [
       ...(map.groups ?? []).map((group) => ({ group, modules: map.modules.filter((module) => group.members.includes(module.id)) })),
@@ -1370,11 +1384,19 @@ ${localized2(module, "responsibility")}`;
       if (!section.modules.length) continue;
       const members = [...section.modules].sort((a, b) => a.layout.row - b.layout.row || a.layout.column - b.layout.column);
       const columns2 = Math.min(count, members.length);
-      const rows2 = Math.ceil(members.length / columns2);
-      const margin = columns2 === 1 ? (available - 164) / 2 : 40;
-      const step = columns2 === 1 ? 0 : (available - margin * 2 - 164) / (columns2 - 1);
-      members.forEach((module, index) => positions.set(module.id, { x: margin + index % columns2 * step, y: top + 56 + Math.floor(index / columns2) * 132 }));
-      const sectionHeight = 20 + rows2 * 132;
+      const nodeWidth = Math.min(264, (available - 64 - (columns2 - 1) * 48) / columns2);
+      const margin = (available - (nodeWidth * columns2 + (columns2 - 1) * 48)) / 2;
+      let rowTop = top + 56;
+      for (let start = 0; start < members.length; start += columns2) {
+        const row = members.slice(start, start + columns2).map((module) => {
+          const button = document.querySelector(`[data-module="${CSS.escape(module.id)}"]`);
+          if (button) button.style.width = `${nodeWidth}px`;
+          return { module, h: button?.offsetHeight || 88 };
+        });
+        row.forEach(({ module, h }, column) => positions.set(module.id, { x: margin + column * (nodeWidth + 48), y: rowTop, w: nodeWidth, h }));
+        rowTop += Math.max(...row.map((item) => item.h)) + 60;
+      }
+      const sectionHeight = rowTop - top - 28;
       const frame = groupFrames.find((entry) => entry.group.id === section.group?.id)?.label.parentElement;
       if (frame) Object.assign(frame.style, { left: "16px", top: `${top}px`, width: `${available - 32}px`, height: `${sectionHeight}px` });
       top += sectionHeight + 48;
@@ -1417,7 +1439,7 @@ ${localized2(module, "responsibility")}`;
     const bottom = boxes.length ? Math.max(...boxes.map((box) => box.offsetTop + box.offsetHeight)) : 0;
     const stage = $("map-stage").getBoundingClientRect(), frame = viewport.getBoundingClientRect();
     const stageX = stage.left - frame.left + viewport.scrollLeft, stageY = stage.top - frame.top + viewport.scrollTop;
-    viewport.scrollTo(stageX + (left + right) / 2 * zoom - viewport.clientWidth / 2, boxes.length ? stageY + (top + bottom) / 2 * zoom - viewport.clientHeight / 2 : 0);
+    viewport.scrollTo({ left: stageX + (left + right) / 2 * zoom - viewport.clientWidth / 2, top: boxes.length ? stageY + (top + bottom) / 2 * zoom - viewport.clientHeight / 2 : 0, behavior: scrollBehavior() });
   }
   for (const [id, icon] of Object.entries({ "zoom-in": "zoom-in", "zoom-out": "zoom-out", fit: "maximize", actual: "scan" })) $(id).innerHTML = icons[icon] || "";
   $("zoom-in").onclick = () => {
@@ -1439,7 +1461,7 @@ ${localized2(module, "responsibility")}`;
     fitting = true;
     fitAll = true;
     updateZoom();
-    viewport.scrollTo(0, 0);
+    viewport.scrollTo({ left: 0, top: 0, behavior: scrollBehavior() });
   };
   var readerWidth = viewport.clientWidth;
   new ResizeObserver(() => {
@@ -1447,10 +1469,7 @@ ${localized2(module, "responsibility")}`;
       readerWidth = viewport.clientWidth;
       reflowReader();
     }
-    if (fitting) {
-      updateZoom();
-      focusChange();
-    }
+    if (fitting) updateZoom();
   }).observe(viewport);
   window.addEventListener("resize", () => {
     if (fitting) updateZoom();
@@ -1476,7 +1495,6 @@ ${localized2(module, "responsibility")}`;
   var edges = [];
   var selectedModuleId;
   var hoveredModuleId;
-  var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   var flowLabel = document.createElement("label");
   flowLabel.className = "flow-toggle";
   flowLabel.title = "\u5173\u7CFB\u65B9\u5411\u52A8\u753B\uFF0C\u4E0D\u4EE3\u8868\u5B9E\u65F6\u6570\u636E\u4F20\u8F93";
@@ -1523,7 +1541,7 @@ ${localized2(module, "responsibility")}`;
       edge.path.style.display = visible ? "" : "none";
       edge.path.classList.toggle("context-muted", Boolean(activeModuleId) && !relevant);
       edge.label.classList.toggle("context-muted", Boolean(activeModuleId) && !relevant);
-      if (reader) edge.label.classList.toggle("visible", Boolean(activeModuleId) && relevant);
+      if (reader) edge.label.classList.remove("visible");
       if (visible) visibleCount++;
       const active = visible && flowToggle.checked && !reducedMotion.matches && !document.hidden && relevant;
       edge.dot.style.display = active ? "" : "none";
@@ -1756,6 +1774,45 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
   zoomTools.append($("zoom-out"), $("actual"), $("zoom-in"), $("fit"));
   mapTools.replaceChildren(relationTools, zoomTools, showDetails);
   if (reader) mapTools.append(languageSelect, $("uncertainty"));
+  var fullscreenButton = document.createElement("button");
+  fullscreenButton.id = "fullscreen";
+  fullscreenButton.type = "button";
+  fullscreenButton.hidden = reader && window.parent !== window;
+  var fullscreenStatus = document.createElement("span");
+  fullscreenStatus.id = "fullscreen-status";
+  fullscreenStatus.setAttribute("role", "status");
+  fullscreenStatus.hidden = true;
+  mapTools.append(fullscreenButton);
+  mapHeading.append(fullscreenStatus);
+  var fullscreenPending = false;
+  function syncFullscreen() {
+    const active = document.fullscreenElement === document.documentElement;
+    fullscreenButton.textContent = isChinese2() ? active ? "\u9000\u51FA\u5168\u5C4F" : "\u5168\u5C4F\u67E5\u770B" : active ? "Exit fullscreen" : "Fullscreen";
+    fullscreenButton.setAttribute("aria-pressed", String(active));
+    fullscreenButton.setAttribute("aria-busy", String(fullscreenPending));
+  }
+  fullscreenButton.onclick = async () => {
+    if (fullscreenPending) return;
+    fullscreenPending = true;
+    fullscreenStatus.hidden = true;
+    syncFullscreen();
+    try {
+      if (document.fullscreenElement === document.documentElement) await document.exitFullscreen();
+      else {
+        if (!document.documentElement.requestFullscreen) throw new Error("Fullscreen unavailable");
+        await document.documentElement.requestFullscreen();
+        if (document.fullscreenElement !== document.documentElement) throw new Error("Fullscreen not entered");
+      }
+    } catch {
+      fullscreenStatus.textContent = isChinese2() ? "\u5168\u5C4F\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5\u3002" : "Fullscreen failed. Please try again.";
+      fullscreenStatus.hidden = false;
+    } finally {
+      fullscreenPending = false;
+      syncFullscreen();
+    }
+  };
+  document.addEventListener("fullscreenchange", syncFullscreen);
+  syncFullscreen();
   if (activityEvents.length) {
     element(mapHeading.firstElementChild, HTMLElement).hidden = true;
     mapHeading.prepend($("activity-mode"));
@@ -2615,8 +2672,8 @@ ${localized2(check, "summary")}`);
     updateZoom();
     fitting = saved.fitting;
     fitAll = saved.fitAll;
-    for (const [el, x, y] of saved.panes) el.scrollTo(x, y);
-    window.scrollTo(saved.x, saved.y);
+    for (const [el, x, y] of saved.panes) el.scrollTo({ left: x, top: y, behavior: scrollBehavior() });
+    window.scrollTo({ left: saved.x, top: saved.y, behavior: scrollBehavior() });
     (saved.focus instanceof HTMLElement && saved.focus.isConnected && !saved.focus.closest("#guide-invite") ? saved.focus : guideLaunch).focus({ preventScroll: true });
   }
   guideLaunch.onclick = $("guide-start").onclick = startGuide;

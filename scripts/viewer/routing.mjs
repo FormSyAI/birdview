@@ -8,7 +8,7 @@ function requiredAt(values, index) {
 }
 function routeArchitecture(relationships, positions) {
   const gap = 10;
-  const boxes = [...positions].map(([id, p]) => ({ id, x: p.x, y: p.y, w: 164, h: 72 }));
+  const boxes = [...positions].map(([id, p]) => ({ id, x: p.x, y: p.y, w: p.w ?? 164, h: p.h ?? 72 }));
   const boxById = new Map(boxes.map((b) => [b.id, b]));
   const obstacles = boxes.map((b) => ({ x: b.x - gap, y: b.y - gap, w: b.w + gap * 2, h: b.h + gap * 2 }));
   const ports = /* @__PURE__ */ new Map();
@@ -49,12 +49,16 @@ function routeArchitecture(relationships, positions) {
     });
   }
   const used = [];
-  const centers = (values, size) => {
-    const sorted = [...new Set(values)].sort((a, b) => a - b);
-    return sorted.slice(1).map((value, i) => (requiredAt(sorted, i) + size + value) / 2);
+  const centers = (axis, size) => {
+    const sorted = [...new Set(boxes.map((box) => box[axis]))].sort((a, b) => a - b);
+    return sorted.slice(1).flatMap((value, i) => {
+      const previous = requiredAt(sorted, i);
+      const end = Math.max(...boxes.filter((box) => box[axis] === previous).map((box) => box[axis] + box[size]));
+      return end < value ? [(end + value) / 2] : [];
+    });
   };
-  const lanesX = centers(boxes.map((b) => b.x), 164);
-  const lanesY = centers(boxes.map((b) => b.y), 72);
+  const lanesX = centers("x", "w");
+  const lanesY = centers("y", "h");
   const outerY = Math.max(...boxes.map((b) => b.y + b.h)) + 24;
   return routes.map(({ start, end, relation }) => {
     const startStub = start.stub, endStub = end.stub, startPoint = start.point, endPoint = end.point;

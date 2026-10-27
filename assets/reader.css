@@ -162,8 +162,8 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] .activity-panel :is(#activity-summary,#activity-source) { display: none; }
 [data-presentation="reader"] .activity-history:has(#activity-step option:only-child) { display: none; }
 [data-presentation="reader"] #activity-phase { border: 0; padding: 0; color: var(--muted) !important; }
-[data-presentation="reader"] .node { border-radius: 10px; box-shadow: none; }
-[data-presentation="reader"] .node strong { font-size: 13px; font-weight: 600; text-wrap: balance; }
+[data-presentation="reader"] .node { height: auto; min-height: 88px; padding: 12px 40px 12px 28px; grid-template-rows: auto auto; border-radius: 10px; box-shadow: none; }
+[data-presentation="reader"] .node strong { display: block; max-height: none; overflow: visible; -webkit-line-clamp: unset; font-size: 14px; line-height: 18px; font-weight: 600; text-wrap: balance; }
 [data-presentation="reader"] .node small { font-size: 11px; line-height: 14px; }
 [data-presentation="reader"] .node.activity-target { box-shadow: none !important; }
 [data-presentation="reader"] .node.flow-hover { box-shadow: 0 0 0 1px var(--node-accent); }

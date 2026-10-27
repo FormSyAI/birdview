@@ -7,7 +7,7 @@ function show(index: number): void {
 document.querySelectorAll<HTMLButtonElement>('[data-goto]').forEach(button => {
   button.onclick = () => {
     show(Number(button.dataset.goto));
-    if (button.closest('.recommend')) document.querySelector('.tabs, .sheet-page:not([hidden])')?.scrollIntoView({ block: 'start' });
+    if (button.closest('.recommend')) document.querySelector('.tabs, .sheet-page:not([hidden])')?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'auto' });
   };
 });
 // A node keeps its id in both drawings; pointing at one lights up its counterpart.
