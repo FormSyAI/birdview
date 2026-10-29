@@ -2,7 +2,7 @@
 // Source: src/birdview.mts. Regenerate scripts/birdview.mjs with npm run build.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync } from './sandbox-process.mjs';
 const start = '<!-- birdview:mode:start -->';
 const end = '<!-- birdview:mode:end -->';
 try {

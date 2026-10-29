@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from './sandbox-process.mjs';
 export function collectRuleHistory(catalog, repository) {
     const git = (...args) => execFileSync('git', ['--no-optional-locks', '-C', repository, ...args], {
         encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024,
