@@ -72,10 +72,10 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] .map-heading #activity-disclosure { display: contents; }
 [data-presentation="reader"] #activity-meta[hidden] { display: none; }
 [data-presentation="reader"] #activity-disclosure > summary {
-  grid-area: 1 / 2;
+  grid-area: 2 / 1;
   display: inline-flex;
   align-items: center;
-  justify-self: end;
+  justify-self: start;
   gap: 6px;
   min-height: 32px;
   padding: 6px 8px;
@@ -92,7 +92,7 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] #activity-disclosure[open] .activity-chevron { transform: rotate(90deg); }
 [data-presentation="reader"] .map-heading #activity-details {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 4;
   position: static;
   width: auto;
   max-height: none;
@@ -124,7 +124,7 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
   font-size: 12px;
 }
 [data-presentation="reader"] #activity-meta #impact-toggle {
-  grid-area: 1 / 3;
+  grid-area: 2 / 3;
   min-height: 32px;
   padding: 6px 8px;
   margin: 0;
@@ -134,7 +134,7 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
   line-height: 20px;
 }
 [data-presentation="reader"] .map-tools {
-  grid-area: 2 / 1 / auto / -1;
+  grid-area: 3 / 1 / auto / -1;
   display: flex;
   flex-wrap: wrap;
   width: 100%;
@@ -194,9 +194,25 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] #activity-disclosure::details-content { display: contents; }
 [data-presentation="reader"] #activity-disclosure:not([open]) #activity-details { display: none; }
 [data-presentation="reader"] body { overflow-anchor: none; }
-[data-presentation="reader"] .reader-views { grid-area: 1 / 1; display: flex; align-items: center; gap: 12px; }
+[data-presentation="reader"] .reader-views { grid-area: 1 / 1 / auto / -1; display: flex; align-items: center; gap: 12px; }
 [data-presentation="reader"] .activity-panel:has(#activity-step option:only-child) { display: none; }
 [data-presentation="reader"] #groups .group-frame { background: transparent; border-color: var(--line); }
 @media (max-width: 620px) {
   [data-presentation="reader"] .reader-views { grid-column: 1 / -1; }
 }
+
+/* Reader views share the toolbar; constraints replace the drawing in place. */
+[data-presentation="reader"] [hidden] { display: none !important; }
+[data-presentation="reader"] .map-panes .map-scroll { background-image: none; background-color: transparent; }
+[data-presentation="reader"] #activity-mode { display: flex; flex-wrap: wrap; gap: 4px; }
+[data-presentation="reader"] #activity-mode [role="tab"] { width: auto; min-height: 36px; padding: 6px 12px; white-space: nowrap; }
+[data-presentation="reader"] #activity-mode [aria-selected="true"] { color: inherit; background: var(--reader-hover); }
+[data-presentation="reader"] #constraints-panel { padding: 20px 0 0; min-width: 0; }
+[data-presentation="reader"] #constraints-panel h2 { margin: 0; font-size: 20px; }
+[data-presentation="reader"] .constraint-discovery summary { width: fit-content; background: transparent; }
+[data-presentation="reader"] .workspace.constraints-open aside { background: var(--reader-surface); }
+[data-presentation="reader"] #constraints-panel .constraint-row[aria-pressed="true"] { box-shadow: none; }
+[data-presentation="reader"] #constraints-panel .constraint-row strong { color: inherit; font-size: 14px; }
+[data-presentation="reader"] #constraints-panel .constraint-detail { border-left: 0; }
+[data-presentation="reader"] #constraints-panel .constraint-detail p { max-width: 75ch; font-size: 14px; line-height: 1.7; }
+[data-presentation="reader"] #constraints-panel .constraint-source blockquote { border-left: 0; }

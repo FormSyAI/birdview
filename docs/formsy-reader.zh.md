@@ -4,6 +4,14 @@
 
 `presentation: 'reader'` 将现有 Birdview 图谱适配到 FormSy 工作台。它复用同一份架构模板、viewer、节点、SVG 路由连线、活动控制、缩放、语言/主题控制与模块详情。它不另建卡片界面或关系列表界面。
 
+阅读器在顶部提供“完整架构”“更改视图”（存在活动时）和“约束”标签。约束直接替换同一工具栏下方的图谱区域，不再在图谱底部打开详情。切回时保留模块选择、活动记录与缩放。方向键、Home 和 End 可以切换标签。阅读器在两种主题下均使用纯色背景，来源检查保留在“约束”标签的折叠区域内。静态图谱同样提供“约束”标签；规则为空不表示项目不存在约束。
+
+原生阅读器中 1440px 和 390px 的约束视图。
+
+![1440px](images/formsy-reader-constraints-1440.png)
+
+![390px](images/formsy-reader-constraints-390.png)
+
 ```js
 renderArchitecture(architecture, events, {
   presentation: 'reader', readerLanguage: 'zh', readerTheme: 'dark'

@@ -94,9 +94,9 @@ try {
     await page.locator('#activity-disclosure > summary').click();
     assert.equal(await page.locator('#activity-details').isVisible(), false);
     await page.locator('[data-view="architecture"]').click();
-    assert.equal(await page.locator('[data-view="architecture"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('[data-view="architecture"]').getAttribute('aria-selected'), 'true');
     await page.locator('[data-view="activity"]').click();
-    assert.equal(await page.locator('[data-view="activity"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('[data-view="activity"]').getAttribute('aria-selected'), 'true');
   }
   const rejected = await browser.newPage();
   await rejected.addInitScript(() => { Element.prototype.requestFullscreen = () => Promise.reject(new Error('fixture denial')); });
