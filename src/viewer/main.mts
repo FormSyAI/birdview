@@ -297,6 +297,7 @@ let fitAll = false;
 let floored = false;
 const viewport = query('.map-scroll');
 function updateZoom() {
+  if (reader && !viewport.clientWidth) return;
   if (fitting) {
     const availableHeight = Math.max(180, Math.min(viewport.clientHeight - 40, window.innerHeight - viewport.getBoundingClientRect().top - 70));
     // Fit may enlarge small maps so large screens are used, but not past legible-text scale.
@@ -529,6 +530,7 @@ for (const module of map.modules) {
 }
 const moduleMeta = document.createElement('div');
 function reflowReader() {
+  if (!viewport.clientWidth) return;
   readerLayout();
   Object.assign($('map').style, {width:`${width}px`, height:`${height}px`});
   $('connections').setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -673,7 +675,7 @@ fullscreenButton.onclick = async () => {
 };
 document.addEventListener('fullscreenchange', syncFullscreen);
 syncFullscreen();
-if (activityEvents.length) {
+if (activityEvents.length || reader) {
   element(mapHeading.firstElementChild, HTMLElement).hidden = true;
   mapHeading.prepend($('activity-mode'));
   // Targets share the view-toggle row instead of taking a row of their own.
@@ -682,7 +684,8 @@ if (activityEvents.length) {
     const views = document.createElement('div');
     views.className = 'reader-views';
     mapHeading.prepend(views);
-    views.append($('activity-mode'), $('activity-phase'));
+    views.append($('activity-mode'));
+    $('activity-phase').hidden = !activityEvents.length;
   }
 }
 required(query('.legend').lastElementChild).before(relationCount);
@@ -692,8 +695,9 @@ for (const [mode, labels] of Object.entries(viewModes)) {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.view = mode;
+  button.hidden = reader && mode === 'activity' && !activityEvents.length;
   button.innerHTML = `${icons[labels[2]] || ''}<span>${labels[0]}</span>`;
-  button.onclick = () => { if (mode !== 'architecture' && mode !== 'activity') throw new Error('Unknown view mode.'); activityMode = mode; hoveredModuleId = undefined; updateActivity(); updateFlow(); };
+  button.onclick = () => { if (mode !== 'architecture' && mode !== 'activity') throw new Error('Unknown view mode.'); if (reader) showReaderConstraints(false); activityMode = mode; hoveredModuleId = undefined; updateActivity(); updateFlow(); };
   $('activity-mode').append(button);
 }
 const activityStep = $('activity-step');
@@ -916,11 +920,11 @@ function updateActivity() {
   const terminalPhase = ['completed', 'failed', 'cancelled'].includes(event.phase);
   const targetLabel = terminalPhase ? (zh ? '无当前目标' : 'No current targets') : event.phase === 'planned' ? (zh ? '下一步目标' : 'Next-step targets') : event.phase === 'verifying' ? (zh ? '验证目标' : 'Verification targets') : (zh ? '修改目标' : 'Edit targets');
   $('activity-mode').setAttribute('aria-label', zh ? '视图' : 'View');
-  for (const button of $('activity-mode').querySelectorAll<HTMLButtonElement>('button')) {
+  for (const button of $('activity-mode').querySelectorAll<HTMLButtonElement>('[data-view]')) {
     const mode = button.dataset.view;
     const labels = mode === 'activity' ? viewModes[mode] : viewModes.architecture;
     query('span', button).textContent = required(labels[zh ? 0 : 1]) || labels[0];
-    button.setAttribute('aria-pressed', String(button.dataset.view === activityMode));
+    if (!reader) button.setAttribute('aria-pressed', String(button.dataset.view === activityMode));
   }
   activityStep.setAttribute('aria-label', zh ? '活动历史' : 'Activity history');
   // Position and phase are what readers scan for; the task id only matters when the log mixes tasks.
@@ -1056,7 +1060,8 @@ function updateActivity() {
       entry.append(swatch, document.createTextNode(label)); legend.append(entry);
     }
   } else legend.textContent = source;
-  updateZoom();
+  syncReaderView();
+  if (!reader || !constraintPanelOpen) updateZoom();
   focusChange();
 }
 
@@ -1088,7 +1093,8 @@ const constraintStates: Record<Constraint['applicability'] | 'unverified' | 'sup
 const constraintButton = document.createElement('button');
 constraintButton.id = 'show-constraints';
 constraintButton.setAttribute('aria-controls', 'constraints-panel');
-mapTools.append(constraintButton);
+if (reader) $('activity-mode').append(constraintButton);
+else mapTools.append(constraintButton);
 const moduleContent = document.createElement('div');
 moduleContent.id = 'module-content';
 moduleContent.append(...[...inspector.children].filter(child => child !== closeDetails));
@@ -1100,8 +1106,62 @@ moduleContent.append(moduleConstraints);
 const constraintsPanel = document.createElement('section');
 constraintsPanel.id = 'constraints-panel';
 constraintsPanel.hidden = true;
-inspector.append(constraintsPanel);
+if (reader) {
+  mapHeading.after(activityPanel, constraintsPanel);
+  $('activity-mode').setAttribute('role', 'tablist');
+  $('activity-mode').addEventListener('keydown', event => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key) || !(event.target instanceof HTMLButtonElement)) return;
+    const tabs = [...$('activity-mode').querySelectorAll<HTMLButtonElement>('button')].filter(tab => !tab.hidden);
+    const index = tabs.indexOf(event.target);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next]?.click(); tabs[next]?.focus();
+  });
+} else inspector.append(constraintsPanel);
+let readerInspectorOpen = false;
+function showReaderConstraints(open: boolean) {
+  if (!reader) return;
+  if (open && !constraintPanelOpen) readerInspectorOpen = workspace.classList.contains('inspector-open');
+  if (!open && constraintPanelOpen) workspace.classList.toggle('inspector-open', readerInspectorOpen);
+  constraintPanelOpen = open;
+  syncReaderView();
+  updateConstraints();
+  if (!open) updateZoom();
+}
+function syncReaderView() {
+  if (!reader) return;
+  const open = constraintPanelOpen;
+  const active = open ? constraintButton : required($('activity-mode').querySelector<HTMLButtonElement>(`[data-view="${activityMode}"]`));
+  for (const button of $('activity-mode').querySelectorAll<HTMLButtonElement>('button')) {
+    button.id ||= `reader-tab-${button.dataset.view}`;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', button === constraintButton ? 'constraints-panel' : 'reader-graph-panel');
+    button.setAttribute('aria-selected', String(button === active));
+    button.removeAttribute('aria-pressed');
+    button.removeAttribute('aria-expanded');
+    button.tabIndex = button === active ? 0 : -1;
+    if (button !== constraintButton) query('span', button).textContent = required(viewModes[button.dataset.view === 'activity' ? 'activity' : 'architecture'][isChinese() ? 0 : 1]);
+  }
+  $('activity-mode').setAttribute('aria-label', constraintText('视图', 'View'));
+  mapPanes.id = 'reader-graph-panel';
+  mapPanes.setAttribute('role', 'tabpanel');
+  mapPanes.setAttribute('aria-labelledby', active.id);
+  mapPanes.hidden = open;
+  constraintsPanel.setAttribute('role', 'tabpanel');
+  constraintsPanel.setAttribute('aria-labelledby', constraintButton.id);
+  constraintsPanel.hidden = !open;
+  query('.legend').hidden = open;
+  inspector.hidden = open;
+  relationTools.hidden = zoomTools.hidden = showDetails.hidden = $('uncertainty').hidden = open;
+  $('activity-meta').hidden = open || activityMode !== 'activity' || !activityEvents.length;
+  $('activity-phase').hidden = open || !activityEvents.length;
+  activityPanel.hidden = open || !activityEvents.length;
+}
 constraintButton.onclick = () => {
+  if (reader) { showReaderConstraints(true); return; }
   constraintPanelOpen = !(constraintPanelOpen && workspace.classList.contains('inspector-open'));
   selectedConstraintId = undefined;
   setInspector(constraintPanelOpen);
@@ -1143,7 +1203,7 @@ function updateConstraints() {
     : discoveryRecorded
       ? constraintText('已记录来源检查，但尚无整理后的架构规则；不代表没有约束。', 'Source inspection recorded, but no architecture rules curated; this does not mean there are no constraints.')
       : constraintText('尚未记录本地约束扫描，不能判断是否存在适用约束。', 'Local constraint discovery is not recorded; applicable constraints are unknown.');
-  buttonLabel.textContent = constraintRules.length
+  buttonLabel.textContent = reader ? constraintText('约束', 'Constraints') : constraintRules.length
     ? `${constraintText('适用约束', 'Applicable constraints')} · ${applicable.length}`
     : DATA.constraintView ? constraintText('约束 · 未关联', 'Constraints · Unlinked')
       : discoveryRecorded ? constraintText('约束 · 待整理', 'Constraints · Pending review')
@@ -1158,7 +1218,8 @@ function updateConstraints() {
     count.ariaLabel = count.title;
     constraintButton.append(count);
   }
-  constraintButton.title = constraintButton.ariaLabel = constraintText('查看约束与来源', 'Inspect constraints and sources');
+  constraintButton.title = constraintText('查看约束与来源', 'Inspect constraints and sources');
+  constraintButton.ariaLabel = reader ? constraintText('约束', 'Constraints') : constraintButton.title;
   constraintButton.setAttribute('aria-expanded', String(open));
   workspace.classList.toggle('constraints-open', open);
   moduleContent.hidden = constraintPanelOpen;
@@ -1174,7 +1235,9 @@ function updateConstraints() {
     button.className = 'constraint-module-link';
     button.textContent = localized(rule, 'name');
     button.onclick = () => {
-      selectedConstraintId = rule.id; constraintPanelOpen = true; setInspector(true);
+      selectedConstraintId = rule.id;
+      if (reader) showReaderConstraints(true);
+      else { constraintPanelOpen = true; setInspector(true); }
       constraintsPanel.querySelector<HTMLButtonElement>(`[data-constraint="${rule.id}"]`)?.focus();
     };
     moduleConstraints.append(button);
@@ -1193,7 +1256,8 @@ function updateConstraints() {
   const context = document.createElement('p');
   context.className = 'constraint-context';
   context.textContent = event ? `${event.taskId} · ${constraintText('步骤', 'Step')} ${event.sequence}` : constraintText('项目架构快照', 'Project architecture snapshot');
-  constraintsPanel.append(eyebrow, heading, context);
+  if (!reader) constraintsPanel.append(eyebrow);
+  constraintsPanel.append(heading, context);
   const freshness = DATA.constraintFreshness;
   const snapshot = document.createElement('div');
   snapshot.className = 'constraint-snapshot';
@@ -1319,6 +1383,7 @@ function updateConstraints() {
     empty.textContent = constraintRules.length ? constraintText('此范围未记录约束', 'No constraints recorded in this scope') : emptyState; list.append(empty);
   }
   constraintsPanel.append(list);
+  syncReaderView();
   const highlighted = open && selected ? constraintModules(selected) : new Set();
   for (const [id, button] of buttons) button.classList.toggle('constraint-highlight', highlighted.has(id));
   for (const edge of edges) edge.path.classList.toggle('constraint-highlight', Boolean(open && selected?.relationships.includes(edge.relation.id)));

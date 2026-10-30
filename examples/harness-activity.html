@@ -1414,6 +1414,7 @@ ${localized2(module, "responsibility")}`;
   var floored = false;
   var viewport = query(".map-scroll");
   function updateZoom() {
+    if (reader && !viewport.clientWidth) return;
     if (fitting) {
       const availableHeight = Math.max(180, Math.min(viewport.clientHeight - 40, window.innerHeight - viewport.getBoundingClientRect().top - 70));
       const whole = reader ? Math.min(1, viewport.clientWidth / width) : Math.min(1.5, viewport.clientWidth / width, availableHeight / height);
@@ -1662,6 +1663,7 @@ ${module.responsibility}`;
   }
   var moduleMeta = document.createElement("div");
   function reflowReader() {
+    if (!viewport.clientWidth) return;
     readerLayout();
     Object.assign($("map").style, { width: `${width}px`, height: `${height}px` });
     $("connections").setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -1813,7 +1815,7 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
   };
   document.addEventListener("fullscreenchange", syncFullscreen);
   syncFullscreen();
-  if (activityEvents.length) {
+  if (activityEvents.length || reader) {
     element(mapHeading.firstElementChild, HTMLElement).hidden = true;
     mapHeading.prepend($("activity-mode"));
     $("activity-mode").after($("activity-meta"));
@@ -1821,7 +1823,8 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
       const views = document.createElement("div");
       views.className = "reader-views";
       mapHeading.prepend(views);
-      views.append($("activity-mode"), $("activity-phase"));
+      views.append($("activity-mode"));
+      $("activity-phase").hidden = !activityEvents.length;
     }
   }
   required(query(".legend").lastElementChild).before(relationCount);
@@ -1831,9 +1834,11 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.view = mode;
+    button.hidden = reader && mode === "activity" && !activityEvents.length;
     button.innerHTML = `${icons[labels[2]] || ""}<span>${labels[0]}</span>`;
     button.onclick = () => {
       if (mode !== "architecture" && mode !== "activity") throw new Error("Unknown view mode.");
+      if (reader) showReaderConstraints(false);
       activityMode = mode;
       hoveredModuleId = void 0;
       updateActivity();
@@ -2077,11 +2082,11 @@ ${localized2(item, "note")}`).join("\n\n") || t("\u65E0\u6765\u6E90\u8BC1\u636E"
     const terminalPhase = ["completed", "failed", "cancelled"].includes(event.phase);
     const targetLabel = terminalPhase ? zh ? "\u65E0\u5F53\u524D\u76EE\u6807" : "No current targets" : event.phase === "planned" ? zh ? "\u4E0B\u4E00\u6B65\u76EE\u6807" : "Next-step targets" : event.phase === "verifying" ? zh ? "\u9A8C\u8BC1\u76EE\u6807" : "Verification targets" : zh ? "\u4FEE\u6539\u76EE\u6807" : "Edit targets";
     $("activity-mode").setAttribute("aria-label", zh ? "\u89C6\u56FE" : "View");
-    for (const button of $("activity-mode").querySelectorAll("button")) {
+    for (const button of $("activity-mode").querySelectorAll("[data-view]")) {
       const mode = button.dataset.view;
       const labels = mode === "activity" ? viewModes[mode] : viewModes.architecture;
       query("span", button).textContent = required(labels[zh ? 0 : 1]) || labels[0];
-      button.setAttribute("aria-pressed", String(button.dataset.view === activityMode));
+      if (!reader) button.setAttribute("aria-pressed", String(button.dataset.view === activityMode));
     }
     activityStep.setAttribute("aria-label", zh ? "\u6D3B\u52A8\u5386\u53F2" : "Activity history");
     const multiTask = new Set(activityEvents.map((record) => record.taskId)).size > 1;
@@ -2220,7 +2225,8 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
         legend.append(entry);
       }
     } else legend.textContent = source;
-    updateZoom();
+    syncReaderView();
+    if (!reader || !constraintPanelOpen) updateZoom();
     focusChange();
   }
   function reportReaderSize() {
@@ -2255,7 +2261,8 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   var constraintButton = document.createElement("button");
   constraintButton.id = "show-constraints";
   constraintButton.setAttribute("aria-controls", "constraints-panel");
-  mapTools.append(constraintButton);
+  if (reader) $("activity-mode").append(constraintButton);
+  else mapTools.append(constraintButton);
   var moduleContent = document.createElement("div");
   moduleContent.id = "module-content";
   moduleContent.append(...[...inspector.children].filter((child) => child !== closeDetails));
@@ -2267,8 +2274,65 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   var constraintsPanel = document.createElement("section");
   constraintsPanel.id = "constraints-panel";
   constraintsPanel.hidden = true;
-  inspector.append(constraintsPanel);
+  if (reader) {
+    mapHeading.after(activityPanel, constraintsPanel);
+    $("activity-mode").setAttribute("role", "tablist");
+    $("activity-mode").addEventListener("keydown", (event) => {
+      const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+      if (!keys.includes(event.key) || !(event.target instanceof HTMLButtonElement)) return;
+      const tabs = [...$("activity-mode").querySelectorAll("button")].filter((tab) => !tab.hidden);
+      const index = tabs.indexOf(event.target);
+      if (index < 0) return;
+      event.preventDefault();
+      const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next]?.click();
+      tabs[next]?.focus();
+    });
+  } else inspector.append(constraintsPanel);
+  var readerInspectorOpen = false;
+  function showReaderConstraints(open) {
+    if (!reader) return;
+    if (open && !constraintPanelOpen) readerInspectorOpen = workspace.classList.contains("inspector-open");
+    if (!open && constraintPanelOpen) workspace.classList.toggle("inspector-open", readerInspectorOpen);
+    constraintPanelOpen = open;
+    syncReaderView();
+    updateConstraints();
+    if (!open) updateZoom();
+  }
+  function syncReaderView() {
+    if (!reader) return;
+    const open = constraintPanelOpen;
+    const active = open ? constraintButton : required($("activity-mode").querySelector(`[data-view="${activityMode}"]`));
+    for (const button of $("activity-mode").querySelectorAll("button")) {
+      button.id ||= `reader-tab-${button.dataset.view}`;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", button === constraintButton ? "constraints-panel" : "reader-graph-panel");
+      button.setAttribute("aria-selected", String(button === active));
+      button.removeAttribute("aria-pressed");
+      button.removeAttribute("aria-expanded");
+      button.tabIndex = button === active ? 0 : -1;
+      if (button !== constraintButton) query("span", button).textContent = required(viewModes[button.dataset.view === "activity" ? "activity" : "architecture"][isChinese2() ? 0 : 1]);
+    }
+    $("activity-mode").setAttribute("aria-label", constraintText("\u89C6\u56FE", "View"));
+    mapPanes.id = "reader-graph-panel";
+    mapPanes.setAttribute("role", "tabpanel");
+    mapPanes.setAttribute("aria-labelledby", active.id);
+    mapPanes.hidden = open;
+    constraintsPanel.setAttribute("role", "tabpanel");
+    constraintsPanel.setAttribute("aria-labelledby", constraintButton.id);
+    constraintsPanel.hidden = !open;
+    query(".legend").hidden = open;
+    inspector.hidden = open;
+    relationTools.hidden = zoomTools.hidden = showDetails.hidden = $("uncertainty").hidden = open;
+    $("activity-meta").hidden = open || activityMode !== "activity" || !activityEvents.length;
+    $("activity-phase").hidden = open || !activityEvents.length;
+    activityPanel.hidden = open || !activityEvents.length;
+  }
   constraintButton.onclick = () => {
+    if (reader) {
+      showReaderConstraints(true);
+      return;
+    }
     constraintPanelOpen = !(constraintPanelOpen && workspace.classList.contains("inspector-open"));
     selectedConstraintId = void 0;
     setInspector(constraintPanelOpen);
@@ -2303,7 +2367,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     const buttonLabel = document.createElement("span");
     const discoveryRecorded = !!map.constraintDiscovery;
     const emptyState = DATA.constraintView ? constraintText("\u7EA6\u675F\u56FE\u5DF2\u6574\u7406\u89C4\u5219\uFF1B\u6B64\u5904\u5C1A\u672A\u8BB0\u5F55\u67B6\u6784\u5173\u8054\u3002", "Rules are available in the constraint graph; architecture links are not recorded here.") : discoveryRecorded ? constraintText("\u5DF2\u8BB0\u5F55\u6765\u6E90\u68C0\u67E5\uFF0C\u4F46\u5C1A\u65E0\u6574\u7406\u540E\u7684\u67B6\u6784\u89C4\u5219\uFF1B\u4E0D\u4EE3\u8868\u6CA1\u6709\u7EA6\u675F\u3002", "Source inspection recorded, but no architecture rules curated; this does not mean there are no constraints.") : constraintText("\u5C1A\u672A\u8BB0\u5F55\u672C\u5730\u7EA6\u675F\u626B\u63CF\uFF0C\u4E0D\u80FD\u5224\u65AD\u662F\u5426\u5B58\u5728\u9002\u7528\u7EA6\u675F\u3002", "Local constraint discovery is not recorded; applicable constraints are unknown.");
-    buttonLabel.textContent = constraintRules.length ? `${constraintText("\u9002\u7528\u7EA6\u675F", "Applicable constraints")} \xB7 ${applicable.length}` : DATA.constraintView ? constraintText("\u7EA6\u675F \xB7 \u672A\u5173\u8054", "Constraints \xB7 Unlinked") : discoveryRecorded ? constraintText("\u7EA6\u675F \xB7 \u5F85\u6574\u7406", "Constraints \xB7 Pending review") : constraintText("\u7EA6\u675F \xB7 \u672A\u626B\u63CF", "Constraints \xB7 Not scanned");
+    buttonLabel.textContent = reader ? constraintText("\u7EA6\u675F", "Constraints") : constraintRules.length ? `${constraintText("\u9002\u7528\u7EA6\u675F", "Applicable constraints")} \xB7 ${applicable.length}` : DATA.constraintView ? constraintText("\u7EA6\u675F \xB7 \u672A\u5173\u8054", "Constraints \xB7 Unlinked") : discoveryRecorded ? constraintText("\u7EA6\u675F \xB7 \u5F85\u6574\u7406", "Constraints \xB7 Pending review") : constraintText("\u7EA6\u675F \xB7 \u672A\u626B\u63CF", "Constraints \xB7 Not scanned");
     constraintButton.append(buttonLabel);
     const attention = constraintRules.filter((rule) => ["uncertain", "conflict"].includes(rule.applicability)).length;
     if (attention) {
@@ -2314,7 +2378,8 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
       count.ariaLabel = count.title;
       constraintButton.append(count);
     }
-    constraintButton.title = constraintButton.ariaLabel = constraintText("\u67E5\u770B\u7EA6\u675F\u4E0E\u6765\u6E90", "Inspect constraints and sources");
+    constraintButton.title = constraintText("\u67E5\u770B\u7EA6\u675F\u4E0E\u6765\u6E90", "Inspect constraints and sources");
+    constraintButton.ariaLabel = reader ? constraintText("\u7EA6\u675F", "Constraints") : constraintButton.title;
     constraintButton.setAttribute("aria-expanded", String(open));
     workspace.classList.toggle("constraints-open", open);
     moduleContent.hidden = constraintPanelOpen;
@@ -2331,8 +2396,11 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
       button.textContent = localized2(rule, "name");
       button.onclick = () => {
         selectedConstraintId = rule.id;
-        constraintPanelOpen = true;
-        setInspector(true);
+        if (reader) showReaderConstraints(true);
+        else {
+          constraintPanelOpen = true;
+          setInspector(true);
+        }
         constraintsPanel.querySelector(`[data-constraint="${rule.id}"]`)?.focus();
       };
       moduleConstraints.append(button);
@@ -2351,7 +2419,8 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     const context = document.createElement("p");
     context.className = "constraint-context";
     context.textContent = event ? `${event.taskId} \xB7 ${constraintText("\u6B65\u9AA4", "Step")} ${event.sequence}` : constraintText("\u9879\u76EE\u67B6\u6784\u5FEB\u7167", "Project architecture snapshot");
-    constraintsPanel.append(eyebrow, heading, context);
+    if (!reader) constraintsPanel.append(eyebrow);
+    constraintsPanel.append(heading, context);
     const freshness = DATA.constraintFreshness;
     const snapshot = document.createElement("div");
     snapshot.className = "constraint-snapshot";
@@ -2499,6 +2568,7 @@ ${localized2(check, "summary")}`);
       list.append(empty);
     }
     constraintsPanel.append(list);
+    syncReaderView();
     const highlighted = open && selected ? constraintModules(selected) : /* @__PURE__ */ new Set();
     for (const [id, button] of buttons) button.classList.toggle("constraint-highlight", highlighted.has(id));
     for (const edge of edges) edge.path.classList.toggle("constraint-highlight", Boolean(open && selected?.relationships.includes(edge.relation.id)));

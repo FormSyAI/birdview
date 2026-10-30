@@ -4,6 +4,14 @@
 
 `presentation: 'reader'` adapts the existing Birdview graph to the FormSy workbench. It uses the same architecture template, viewer, nodes, routed SVG connections, activity controls, zoom, language/theme controls and module inspector. It does not create a separate card or relationship-list interface.
 
+Reader views use top tabs for Architecture, Changes (when activity exists), and Constraints. Constraints replace the drawing directly below the same toolbar instead of opening an inspector below the map. Switching back preserves the module selection, activity record, and zoom. Arrow keys, Home, and End move between tabs. The reader uses a plain background in both themes; source inspection remains a disclosure inside the Constraints tab. Static maps retain the Constraints tab, and an empty rule list does not claim that the project has no constraints.
+
+Constraints in the native reader at 1440px and 390px.
+
+![1440px](images/formsy-reader-constraints-1440.png)
+
+![390px](images/formsy-reader-constraints-390.png)
+
 ```js
 renderArchitecture(architecture, events, {
   presentation: 'reader', readerLanguage: 'zh', readerTheme: 'dark'
