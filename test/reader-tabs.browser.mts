@@ -102,10 +102,13 @@ try {
     assert.ok((await page.locator('#constraints-panel').innerText()).includes('尚未独立 Review'));
     await page.locator('#constraints-panel .constraint-row').click();
     assert.ok((await page.locator('.constraint-detail').innerText()).includes('按条件适用'));
-    await page.getByRole('button',{name:'查看来源全文 · AGENTS.md:2–2',exact:true}).click();
+    const fullSource = page.getByRole('button',{name:'查看来源全文 · AGENTS.md:2–2',exact:true});
+    assert.ok(await fullSource.evaluate(button => button.scrollHeight <= button.clientHeight + 1), 'full-source button text is not clipped by graph tool sizing');
+    await fullSource.click();
     assert.equal(await page.getByRole('tab',{name:'来源',exact:true}).getAttribute('aria-selected'),'true');
     assert.equal(await page.locator('.reader-source-text').innerText().then(value=>value.includes('Run relevant tests.')),true);
     assert.equal(await page.locator('.reader-source-line[data-line="2"] mark').innerText(),'Run relevant tests.');
+    assert.ok(await page.getByRole('button',{name:'AGENTS.md',exact:true}).evaluate(button => button.getBoundingClientRect().width > 90 && button.scrollHeight <= button.clientHeight + 1), 'source paths retain readable horizontal button sizing');
     assert.ok((await page.locator('.reader-source-text').innerText()).includes('</script><img'));
     assert.equal(await page.evaluate(()=>Object.hasOwn(window,'readerInjection')),false);
     assert.equal(await page.locator('.reader-source-text img').count(),0);

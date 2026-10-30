@@ -220,7 +220,7 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] .reader-catalog-tools { display: flex; flex-wrap: wrap; gap: 12px; }
 [data-presentation="reader"] :is(#constraints-panel,#reader-sources-panel) input { max-width: 100%; min-height: 36px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--reader-surface); color: inherit; font: inherit; }
 [data-presentation="reader"] .reader-source-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; }
-[data-presentation="reader"] .reader-source-list button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+[data-presentation="reader"] :is(.reader-source-list button,#constraints-panel .constraint-detail > .constraint-module-link) { display: inline-flex; justify-content: flex-start; width: auto; height: auto; min-height: 36px; max-width: 100%; padding: 6px 10px; text-align: left; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
 [data-presentation="reader"] .reader-source-list [aria-pressed="true"] { background: var(--reader-hover); }
 [data-presentation="reader"] :is(.constraint-detail,.reader-source-detail) p { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-presentation="reader"] :is(.constraint-detail blockquote,.reader-source-text) { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; }
