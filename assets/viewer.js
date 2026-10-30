@@ -805,6 +805,182 @@
     return api;
   }
 
+  // src/viewer/reader-catalog.mts
+  function mountReaderCatalog(rulesPanel, sourcesPanel, catalog, options) {
+    const { text } = options;
+    let query2 = "", sourceQuery = "", moduleId;
+    let moduleOnly = false, selected, sourcePath;
+    let range;
+    const element2 = (tag, content = "", className = "") => {
+      const node = document.createElement(tag);
+      node.textContent = content;
+      node.className = className;
+      return node;
+    };
+    const field = (parent, label, value) => {
+      parent.append(element2("h3", label), element2("p", value));
+    };
+    function renderRules() {
+      rulesPanel.replaceChildren(element2("h2", `${text("\u7EA6\u675F", "Constraints")} \xB7 ${catalog.rules.length}`));
+      rulesPanel.append(element2("p", text("\u89C4\u5219\u5185\u5BB9\u4FDD\u7559\u751F\u6210\u65F6\u7684\u6765\u6E90\u4E0E\u9002\u7528\u6027\uFF1B\u5C1A\u672A\u72EC\u7ACB Review\uFF0C\u4E0D\u80FD\u89C6\u4E3A\u5B9E\u73B0\u5DF2\u901A\u8FC7\u6838\u9A8C\u3002", "Rules retain their generated provenance and applicability. Independent review and implementation verification remain unperformed."), "constraint-context"));
+      const search = element2("input");
+      search.type = "search";
+      search.value = query2;
+      search.ariaLabel = text("\u641C\u7D22\u7EA6\u675F", "Search constraints");
+      search.placeholder = search.ariaLabel;
+      const filter = element2("select");
+      filter.ariaLabel = text("\u7EA6\u675F\u8303\u56F4", "Constraint scope");
+      filter.add(new Option(text("\u5168\u90E8\u89C4\u5219", "All rules"), "all"));
+      filter.add(new Option(text("\u5173\u8054\u9009\u4E2D\u6A21\u5757", "Linked to selected module"), "module"));
+      filter.value = moduleOnly ? "module" : "all";
+      const toolbar = element2("div", "", "reader-catalog-tools");
+      toolbar.append(search, filter);
+      rulesPanel.append(toolbar);
+      const count = element2("p", "", "constraint-context"), list = element2("div", "", "constraint-list");
+      rulesPanel.append(count, list);
+      const renderList = () => {
+        list.replaceChildren();
+        const visible = catalog.rules.filter((rule) => (!moduleOnly || rule.modules?.includes(moduleId ?? "")) && [rule.name, rule.sourcePath, rule.condition, rule.explanation].join("\n").toLocaleLowerCase().includes(query2.toLocaleLowerCase()));
+        count.textContent = `${text("\u663E\u793A", "Showing")} ${visible.length}/${catalog.rules.length}`;
+        for (const rule of visible) {
+          const row = element2("button", "", "constraint-row");
+          row.type = "button";
+          row.dataset.constraint = rule.id;
+          row.setAttribute("aria-pressed", String(selected === rule.id));
+          row.append(element2("strong", rule.name), element2("span", `${rule.sourcePath}:${rule.line}\u2013${rule.endLine}`, "constraint-row-meta"));
+          row.onclick = () => {
+            selected = selected === rule.id ? void 0 : rule.id;
+            renderList();
+            [...list.querySelectorAll(".constraint-row")].find((button) => button.dataset.constraint === rule.id)?.focus({ preventScroll: true });
+          };
+          list.append(row);
+          if (selected !== rule.id) continue;
+          const detail = element2("div", "", "constraint-detail");
+          detail.dataset.ruleDetail = rule.id;
+          const states = { applicable: text("\u9002\u7528", "Applicable"), conditional: text("\u6309\u6761\u4EF6\u9002\u7528", "Conditional"), superseded: text("\u5DF2\u88AB\u66FF\u4EE3", "Superseded"), conflict: text("\u5B58\u5728\u51B2\u7A81", "Conflict"), uncertain: text("\u5F85\u786E\u8BA4", "Uncertain") };
+          field(detail, text("\u9002\u7528\u6027", "Applicability"), states[rule.applicability]);
+          field(detail, text("\u4F7F\u7528\u6761\u4EF6", "Condition"), rule.condition);
+          field(detail, text("\u5177\u4F53\u8981\u6C42", "Requirement"), rule.explanation);
+          field(detail, text("\u5173\u8054\u6A21\u5757", "Linked modules"), rule.modules?.map(options.moduleName).join(" \xB7 ") || text("\u672A\u8BB0\u5F55\u6A21\u5757\u5173\u8054", "No module links recorded"));
+          field(detail, text("\u68C0\u67E5\u65B9\u6CD5", "Verification method"), rule.verification);
+          field(detail, text("\u5B9E\u73B0\u6838\u9A8C", "Implementation verification"), text("\u672A\u72EC\u7ACB\u6838\u9A8C", "Not independently verified"));
+          const source = catalog.sources.find((item) => item.path === rule.sourcePath);
+          if (source) {
+            const quote = element2("blockquote", source.text.split(/\r?\n/).slice(rule.line - 1, rule.endLine).join("\n"));
+            detail.append(element2("h3", text("\u6765\u6E90\u6458\u5F55\uFF08\u539F\u6587\uFF09", "Source excerpt (original)")), quote);
+          }
+          const open = element2("button", `${text("\u67E5\u770B\u6765\u6E90\u5168\u6587", "Read full source")} \xB7 ${rule.sourcePath}:${rule.line}\u2013${rule.endLine}`, "constraint-module-link");
+          open.type = "button";
+          open.onclick = () => {
+            sourcePath = rule.sourcePath;
+            range = { line: rule.line, endLine: rule.endLine };
+            renderSources();
+            options.showSources();
+            sourcesPanel.querySelector(".reader-source-title")?.focus({ preventScroll: true });
+          };
+          detail.append(open);
+          if (rule.history?.status === "tracked") field(detail, text("\u539F\u6587\u884C\u6BB5\u5386\u53F2", "Source range history"), `v${rule.history.version} \xB7 ${rule.history.lastEdited}
+${rule.history.snapshot}`);
+          list.append(detail);
+        }
+        if (!visible.length) list.append(element2("p", text("\u6B64\u8303\u56F4\u6CA1\u6709\u5339\u914D\u89C4\u5219\uFF1B\u4E0D\u4EE3\u8868\u9879\u76EE\u6CA1\u6709\u7EA6\u675F\u3002", "No matching rules in this scope; this does not mean the project has no constraints."), "constraint-empty"));
+      };
+      search.oninput = () => {
+        query2 = search.value;
+        renderList();
+      };
+      filter.onchange = () => {
+        moduleOnly = filter.value === "module";
+        renderList();
+      };
+      renderList();
+    }
+    function renderSources() {
+      sourcesPanel.replaceChildren(element2("h2", `${text("\u6765\u6E90", "Sources")} \xB7 ${catalog.sources.length}`));
+      sourcesPanel.append(element2("p", `${text("\u56FA\u5B9A\u6E90\u7801\u5FEB\u7167", "Fixed source snapshot")}: ${catalog.project.revision}`, "constraint-context"));
+      const coverage = element2("details", "", "constraint-discovery");
+      coverage.append(element2("summary", text("\u67E5\u770B\u6765\u6E90\u8986\u76D6\u4E0E\u7F3A\u53E3", "Source coverage and gaps")));
+      const gaps = catalog.coverage.unresolved ?? [];
+      coverage.append(element2("p", `${text("\u672A\u68C0\u67E5\u8DEF\u5F84", "Uninspected paths")}: ${(catalog.coverage.uninspectedPaths ?? []).length} \xB7 ${text("\u672A\u89E3\u6790\u5F15\u7528", "Unresolved references")}: ${gaps.length}`));
+      for (const gap of gaps) coverage.append(element2("p", `${gap.from} \u2192 ${gap.target} \xB7 ${gap.reason}`));
+      for (const path of catalog.coverage.uninspectedPaths ?? []) coverage.append(element2("p", path));
+      for (const limitation of catalog.coverage.limitations ?? []) coverage.append(element2("p", limitation));
+      sourcesPanel.append(coverage);
+      const search = element2("input");
+      search.type = "search";
+      search.value = sourceQuery;
+      search.ariaLabel = text("\u641C\u7D22\u6765\u6E90\u8DEF\u5F84", "Search source paths");
+      search.placeholder = search.ariaLabel;
+      sourcesPanel.append(search);
+      const list = element2("div", "", "reader-source-list"), detail = element2("section", "", "reader-source-detail");
+      sourcesPanel.append(list, detail);
+      const renderDetail = () => {
+        detail.replaceChildren();
+        const source = catalog.sources.find((item) => item.path === sourcePath);
+        if (!source) {
+          detail.append(element2("p", text("\u9009\u62E9\u6765\u6E90\uFF0C\u9605\u8BFB\u6B64\u5FEB\u7167\u4FDD\u5B58\u7684\u5B8C\u6574\u539F\u6587\u3002", "Select a source to read the full text saved in this snapshot.")));
+          return;
+        }
+        const title = element2("h3", source.path, "reader-source-title");
+        title.tabIndex = -1;
+        detail.append(title);
+        const linked = catalog.rules.filter((rule) => rule.sourcePath === source.path);
+        field(detail, text("\u6765\u6E90\u8BB0\u5F55", "Source record"), `${text("\u5173\u8054\u5019\u9009\u89C4\u5219", "Linked candidate rules")}: ${linked.length}
+${source.kind ?? ""} \xB7 ${source.applicability ?? ""}
+${source.scope ?? ""}`);
+        if (range) field(detail, text("\u5F53\u524D\u5F15\u7528\u884C\u6BB5", "Current cited range"), `${source.path}:${range.line}\u2013${range.endLine}`);
+        const code = element2("pre", "", "reader-source-text");
+        for (const [index, line] of source.text.split(/\r?\n/).entries()) {
+          const row = element2("span", "", "reader-source-line");
+          row.dataset.line = String(index + 1);
+          row.append(element2("span", String(index + 1), "reader-line-number"), element2(range && index + 1 >= range.line && index + 1 <= range.endLine ? "mark" : "span", line || " "));
+          code.append(row);
+        }
+        detail.append(code);
+        const references = catalog.references.filter((item) => item.from === source.path || item.to === source.path);
+        if (references.length) field(detail, text("\u6765\u6E90\u5F15\u7528", "Source references"), references.map((item) => `${item.from} \u2192 ${item.to} \xB7 ${item.target}`).join("\n"));
+      };
+      const renderList = () => {
+        list.replaceChildren();
+        for (const source of catalog.sources.filter((item) => item.path.toLocaleLowerCase().includes(sourceQuery.toLocaleLowerCase()))) {
+          const button = element2("button", source.path, "constraint-module-link");
+          button.type = "button";
+          button.setAttribute("aria-pressed", String(source.path === sourcePath));
+          button.onclick = () => {
+            sourcePath = source.path;
+            range = void 0;
+            renderList();
+            renderDetail();
+          };
+          list.append(button);
+        }
+        if (!list.childElementCount) list.append(element2("p", text("\u6CA1\u6709\u5339\u914D\u7684\u6765\u6E90\u8DEF\u5F84", "No matching source paths")));
+      };
+      search.oninput = () => {
+        sourceQuery = search.value;
+        renderList();
+      };
+      renderList();
+      renderDetail();
+    }
+    return {
+      refresh(currentModule) {
+        moduleId = currentModule;
+        renderRules();
+        renderSources();
+      },
+      relatedRules(currentModule) {
+        return catalog.rules.filter((rule) => rule.modules?.includes(currentModule));
+      },
+      selectRule(id) {
+        selected = id;
+        moduleOnly = false;
+        query2 = "";
+        renderRules();
+      }
+    };
+  }
+
   // src/viewer/main.mts
   var { map, icons, brandLogo } = DATA;
   var reader = DATA.presentation === "reader";
@@ -1910,6 +2086,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   }
   var constraintRules = map.constraints || [];
   var constraintPanelOpen = false;
+  var readerSourcesOpen = false;
   var selectedConstraintId;
   var constraintFilter = "applicable";
   var constraintText = (zh, en) => isChinese2() ? zh : en;
@@ -1945,8 +2122,32 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   var constraintsPanel = document.createElement("section");
   constraintsPanel.id = "constraints-panel";
   constraintsPanel.hidden = true;
+  var readerSourcesPanel = document.createElement("section");
+  readerSourcesPanel.id = "reader-sources-panel";
+  readerSourcesPanel.hidden = true;
+  var readerSourcesButton = document.createElement("button");
+  readerSourcesButton.id = "reader-sources-tab";
+  readerSourcesButton.type = "button";
+  var readerCatalog = reader && DATA.readerCatalog ? mountReaderCatalog(constraintsPanel, readerSourcesPanel, DATA.readerCatalog, {
+    text: constraintText,
+    moduleName: (id) => {
+      const module = map.modules.find((item) => item.id === id);
+      return module ? localized2(module, "name") : id;
+    },
+    showSources: () => {
+      readerSourcesOpen = true;
+      showReaderConstraints(true);
+    }
+  }) : void 0;
+  if (readerCatalog) {
+    $("activity-mode").append(readerSourcesButton);
+    readerSourcesButton.onclick = () => {
+      readerSourcesOpen = true;
+      showReaderConstraints(true);
+    };
+  }
   if (reader) {
-    mapHeading.after(activityPanel, constraintsPanel);
+    mapHeading.after(activityPanel, constraintsPanel, readerSourcesPanel);
     $("activity-mode").setAttribute("role", "tablist");
     $("activity-mode").addEventListener("keydown", (event) => {
       const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
@@ -1966,6 +2167,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     if (open && !constraintPanelOpen) readerInspectorOpen = workspace.classList.contains("inspector-open");
     if (!open && constraintPanelOpen) workspace.classList.toggle("inspector-open", readerInspectorOpen);
     constraintPanelOpen = open;
+    if (!open) readerSourcesOpen = false;
     syncReaderView();
     updateConstraints();
     if (!open) updateZoom();
@@ -1973,16 +2175,16 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   function syncReaderView() {
     if (!reader) return;
     const open = constraintPanelOpen;
-    const active = open ? constraintButton : required($("activity-mode").querySelector(`[data-view="${activityMode}"]`));
+    const active = open ? readerSourcesOpen ? readerSourcesButton : constraintButton : required($("activity-mode").querySelector(`[data-view="${activityMode}"]`));
     for (const button of $("activity-mode").querySelectorAll("button")) {
       button.id ||= `reader-tab-${button.dataset.view}`;
       button.setAttribute("role", "tab");
-      button.setAttribute("aria-controls", button === constraintButton ? "constraints-panel" : "reader-graph-panel");
+      button.setAttribute("aria-controls", button === readerSourcesButton ? "reader-sources-panel" : button === constraintButton ? "constraints-panel" : "reader-graph-panel");
       button.setAttribute("aria-selected", String(button === active));
       button.removeAttribute("aria-pressed");
       button.removeAttribute("aria-expanded");
       button.tabIndex = button === active ? 0 : -1;
-      if (button !== constraintButton) query("span", button).textContent = required(viewModes[button.dataset.view === "activity" ? "activity" : "architecture"][isChinese2() ? 0 : 1]);
+      if (button !== constraintButton && button !== readerSourcesButton) query("span", button).textContent = required(viewModes[button.dataset.view === "activity" ? "activity" : "architecture"][isChinese2() ? 0 : 1]);
     }
     $("activity-mode").setAttribute("aria-label", constraintText("\u89C6\u56FE", "View"));
     mapPanes.id = "reader-graph-panel";
@@ -1991,7 +2193,10 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     mapPanes.hidden = open;
     constraintsPanel.setAttribute("role", "tabpanel");
     constraintsPanel.setAttribute("aria-labelledby", constraintButton.id);
-    constraintsPanel.hidden = !open;
+    constraintsPanel.hidden = !open || readerSourcesOpen;
+    readerSourcesPanel.hidden = !open || !readerSourcesOpen;
+    readerSourcesPanel.setAttribute("role", "tabpanel");
+    readerSourcesPanel.setAttribute("aria-labelledby", readerSourcesButton.id);
     query(".legend").hidden = open;
     inspector.hidden = open;
     relationTools.hidden = zoomTools.hidden = showDetails.hidden = $("uncertainty").hidden = open;
@@ -2001,6 +2206,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   }
   constraintButton.onclick = () => {
     if (reader) {
+      readerSourcesOpen = false;
       showReaderConstraints(true);
       return;
     }
@@ -2031,6 +2237,34 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     return !event || rule.scope === "project" || [...constraintModules(rule)].some((id) => event.scope.includes(id));
   }
   function updateConstraints() {
+    if (readerCatalog && DATA.readerCatalog) {
+      constraintButton.textContent = `${constraintText("\u7EA6\u675F", "Constraints")} \xB7 ${DATA.readerCatalog.rules.length}`;
+      constraintButton.ariaLabel = constraintText("\u7EA6\u675F", "Constraints");
+      readerSourcesButton.textContent = `${constraintText("\u6765\u6E90", "Sources")} \xB7 ${DATA.readerCatalog.sources.length}`;
+      readerSourcesButton.ariaLabel = constraintText("\u6765\u6E90", "Sources");
+      readerCatalog.refresh(selectedModuleId);
+      moduleConstraints.replaceChildren();
+      for (const rule of readerCatalog.relatedRules(selectedModuleId ?? "")) {
+        const button = document.createElement("button");
+        button.className = "constraint-module-link";
+        button.type = "button";
+        button.textContent = rule.name;
+        button.onclick = () => {
+          readerSourcesOpen = false;
+          showReaderConstraints(true);
+          readerCatalog.selectRule(rule.id);
+          constraintsPanel.querySelector('.constraint-row[aria-pressed="true"]')?.focus({ preventScroll: true });
+        };
+        moduleConstraints.append(button);
+      }
+      if (!moduleConstraints.childElementCount) {
+        const empty = document.createElement("p");
+        empty.textContent = constraintText("\u672A\u8BB0\u5F55\u8BE5\u6A21\u5757\u7684\u89C4\u5219\u5173\u8054\uFF1B\u4ECD\u53EF\u9605\u8BFB\u5B8C\u6574\u7EA6\u675F\u76EE\u5F55\u3002", "No rule links recorded for this module; the full constraint catalog remains available.");
+        moduleConstraints.append(empty);
+      }
+      syncReaderView();
+      return;
+    }
     const event = activityMode === "architecture" ? void 0 : activityEvents[activityIndex];
     const applicable = constraintRules.filter((rule) => constraintApplies(rule, event));
     const open = constraintPanelOpen && workspace.classList.contains("inspector-open");

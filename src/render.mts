@@ -26,7 +26,7 @@ const dataUrl = (file: string, type: string): string => `data:${type};base64,${f
 
 export function renderArchitecture(map: unknown, events: readonly unknown[] = [], { simulation = false, repository, constraintCatalog, reviewHref, presentation = 'explorer', readerLanguage, readerTheme }: RenderOptions = {}): string {
   if (presentation !== 'explorer' && presentation !== 'reader') throw new Error('Unknown presentation; use explorer or reader.');
-  if (presentation === 'reader' && (constraintCatalog || reviewHref)) throw new Error('Reader supports architecture/activity data; use explorer for a constraint catalog or review navigation.');
+  if (presentation === 'reader' && reviewHref) throw new Error('Reader does not include review navigation; use explorer.');
   if (readerLanguage !== undefined && readerLanguage !== 'zh' && readerLanguage !== 'en') throw new Error('Reader language must be zh or en.');
   if (readerTheme !== undefined && readerTheme !== 'dark' && readerTheme !== 'light') throw new Error('Reader theme must be dark or light.');
   const result = validate(map, events);
@@ -38,16 +38,20 @@ export function renderArchitecture(map: unknown, events: readonly unknown[] = []
   const constraintFreshness: ConstraintFreshness | undefined = repository ? inspectConstraintFreshness(architecture, repository) : undefined;
   let constraintView: { graph: ConstraintGraph; snapshot: string; scope: string; rules: Array<{ id: string; modules: string[] }> } | undefined;
   if (constraintCatalog) {
+    if (constraintCatalog.schema !== 'birdview.constraint-catalog/v1' || !Array.isArray(constraintCatalog.sources) || !constraintCatalog.coverage || !Array.isArray(constraintCatalog.references)
+      || constraintCatalog.sources.some(source => typeof source.path !== 'string' || typeof source.text !== 'string') || !constraintCatalog.ruleReview?.scope)
+      throw new Error('Invalid constraint catalog');
     const binding = constraintCatalog.architectureBinding;
     if (constraintCatalog.project.name !== architecture.project.name) throw new Error('Constraint and architecture project names differ');
     if (binding && (binding.mapId !== architecture.mapId || binding.mapRevision !== architecture.revision || binding.sourceRevision !== constraintCatalog.project.revision)) throw new Error('Stale architecture binding');
     for (const rule of constraintCatalog.rules) {
       if (rule.modules !== undefined && (!binding || rule.modules.some(id => !architecture.modules.some(module => module.id === id)))) throw new Error(`Invalid module binding: ${rule.id}`);
     }
-    constraintView = { graph: buildConstraintGraph(constraintCatalog), snapshot: constraintCatalog.project.revision,
+    const graph = constraintCatalog.rules.length || presentation !== 'reader' ? buildConstraintGraph(constraintCatalog) : undefined;
+    if (graph && presentation !== 'reader') constraintView = { graph, snapshot: constraintCatalog.project.revision,
       scope: constraintCatalog.ruleReview.scope, rules: constraintCatalog.rules.map(({ id, modules = [] }) => ({ id, modules })) };
   }
-  const data = JSON.stringify({ map: architecture, icons, events, simulation, brandLogo, constraintFreshness, constraintView, ...(reviewHref ? { reviewHref } : {}), ...(presentation === 'reader' ? {presentation, readerLanguage, readerTheme} : {}) }).replace(/</g, '\\u003c');
+  const data = JSON.stringify({ map: architecture, icons, events, simulation, brandLogo, constraintFreshness, constraintView, ...(reviewHref ? { reviewHref } : {}), ...(presentation === 'reader' ? {presentation, readerLanguage, readerTheme, readerCatalog: constraintCatalog} : {}) }).replace(/</g, '\\u003c');
   return read('assets/architecture.html')
     .replace('/* BIRDVIEW_THEME */', () => read('assets/theme.js'))
     .replace('<head>', () => `<head>\n<!--\n${read('LICENSE')}\n${read('THIRD_PARTY_NOTICES')}\n-->`)

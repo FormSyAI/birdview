@@ -2,7 +2,8 @@ import type { Architecture, ActivityEvent, Module, Relationship, Constraint } fr
 import { routeArchitecture, type Position } from './routing.mjs';
 import * as BirdviewI18n from './i18n.mjs';
 import { mountConstraintCanvas, type ConstraintCanvas } from './constraint-canvas.mjs';
-import type { ConstraintFreshness, ConstraintGraph } from '../constraint-types.mjs';
+import { mountReaderCatalog } from './reader-catalog.mjs';
+import type { ConstraintFreshness, ConstraintGraph, ReviewedConstraintCatalog } from '../constraint-types.mjs';
 declare const DATA: {
   map: Architecture;
   events?: ActivityEvent[];
@@ -15,6 +16,7 @@ declare const DATA: {
   presentation?: 'reader';
   readerLanguage?: 'zh' | 'en';
   readerTheme?: 'dark' | 'light';
+  readerCatalog?: ReviewedConstraintCatalog;
 };
 const { map, icons, brandLogo } = DATA;
 const reader = DATA.presentation === 'reader';
@@ -1078,6 +1080,7 @@ if (reader) {
 
 const constraintRules = map.constraints || [];
 let constraintPanelOpen = false;
+let readerSourcesOpen = false;
 let selectedConstraintId: string | undefined;
 let constraintFilter = 'applicable';
 const constraintText = (zh: string, en: string) => isChinese() ? zh : en;
@@ -1106,8 +1109,23 @@ moduleContent.append(moduleConstraints);
 const constraintsPanel = document.createElement('section');
 constraintsPanel.id = 'constraints-panel';
 constraintsPanel.hidden = true;
+const readerSourcesPanel = document.createElement('section');
+readerSourcesPanel.id = 'reader-sources-panel';
+readerSourcesPanel.hidden = true;
+const readerSourcesButton = document.createElement('button');
+readerSourcesButton.id = 'reader-sources-tab';
+readerSourcesButton.type = 'button';
+const readerCatalog = reader && DATA.readerCatalog ? mountReaderCatalog(constraintsPanel, readerSourcesPanel, DATA.readerCatalog, {
+  text: constraintText,
+  moduleName: id => { const module = map.modules.find(item => item.id === id); return module ? localized(module, 'name') : id; },
+  showSources: () => { readerSourcesOpen = true; showReaderConstraints(true); },
+}) : undefined;
+if (readerCatalog) {
+  $('activity-mode').append(readerSourcesButton);
+  readerSourcesButton.onclick = () => { readerSourcesOpen = true; showReaderConstraints(true); };
+}
 if (reader) {
-  mapHeading.after(activityPanel, constraintsPanel);
+  mapHeading.after(activityPanel, constraintsPanel, readerSourcesPanel);
   $('activity-mode').setAttribute('role', 'tablist');
   $('activity-mode').addEventListener('keydown', event => {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
@@ -1127,6 +1145,7 @@ function showReaderConstraints(open: boolean) {
   if (open && !constraintPanelOpen) readerInspectorOpen = workspace.classList.contains('inspector-open');
   if (!open && constraintPanelOpen) workspace.classList.toggle('inspector-open', readerInspectorOpen);
   constraintPanelOpen = open;
+  if (!open) readerSourcesOpen = false;
   syncReaderView();
   updateConstraints();
   if (!open) updateZoom();
@@ -1134,16 +1153,16 @@ function showReaderConstraints(open: boolean) {
 function syncReaderView() {
   if (!reader) return;
   const open = constraintPanelOpen;
-  const active = open ? constraintButton : required($('activity-mode').querySelector<HTMLButtonElement>(`[data-view="${activityMode}"]`));
+  const active = open ? (readerSourcesOpen ? readerSourcesButton : constraintButton) : required($('activity-mode').querySelector<HTMLButtonElement>(`[data-view="${activityMode}"]`));
   for (const button of $('activity-mode').querySelectorAll<HTMLButtonElement>('button')) {
     button.id ||= `reader-tab-${button.dataset.view}`;
     button.setAttribute('role', 'tab');
-    button.setAttribute('aria-controls', button === constraintButton ? 'constraints-panel' : 'reader-graph-panel');
+    button.setAttribute('aria-controls', button === readerSourcesButton ? 'reader-sources-panel' : button === constraintButton ? 'constraints-panel' : 'reader-graph-panel');
     button.setAttribute('aria-selected', String(button === active));
     button.removeAttribute('aria-pressed');
     button.removeAttribute('aria-expanded');
     button.tabIndex = button === active ? 0 : -1;
-    if (button !== constraintButton) query('span', button).textContent = required(viewModes[button.dataset.view === 'activity' ? 'activity' : 'architecture'][isChinese() ? 0 : 1]);
+    if (button !== constraintButton && button !== readerSourcesButton) query('span', button).textContent = required(viewModes[button.dataset.view === 'activity' ? 'activity' : 'architecture'][isChinese() ? 0 : 1]);
   }
   $('activity-mode').setAttribute('aria-label', constraintText('视图', 'View'));
   mapPanes.id = 'reader-graph-panel';
@@ -1152,7 +1171,10 @@ function syncReaderView() {
   mapPanes.hidden = open;
   constraintsPanel.setAttribute('role', 'tabpanel');
   constraintsPanel.setAttribute('aria-labelledby', constraintButton.id);
-  constraintsPanel.hidden = !open;
+  constraintsPanel.hidden = !open || readerSourcesOpen;
+  readerSourcesPanel.hidden = !open || !readerSourcesOpen;
+  readerSourcesPanel.setAttribute('role', 'tabpanel');
+  readerSourcesPanel.setAttribute('aria-labelledby', readerSourcesButton.id);
   query('.legend').hidden = open;
   inspector.hidden = open;
   relationTools.hidden = zoomTools.hidden = showDetails.hidden = $('uncertainty').hidden = open;
@@ -1161,7 +1183,7 @@ function syncReaderView() {
   activityPanel.hidden = open || !activityEvents.length;
 }
 constraintButton.onclick = () => {
-  if (reader) { showReaderConstraints(true); return; }
+  if (reader) { readerSourcesOpen = false; showReaderConstraints(true); return; }
   constraintPanelOpen = !(constraintPanelOpen && workspace.classList.contains('inspector-open'));
   selectedConstraintId = undefined;
   setInspector(constraintPanelOpen);
@@ -1192,6 +1214,22 @@ function constraintApplies(rule: Constraint, event: ActivityEvent | undefined) {
 }
 
 function updateConstraints() {
+  if (readerCatalog && DATA.readerCatalog) {
+    constraintButton.textContent = `${constraintText('约束', 'Constraints')} · ${DATA.readerCatalog.rules.length}`;
+    constraintButton.ariaLabel = constraintText('约束', 'Constraints');
+    readerSourcesButton.textContent = `${constraintText('来源', 'Sources')} · ${DATA.readerCatalog.sources.length}`;
+    readerSourcesButton.ariaLabel = constraintText('来源', 'Sources');
+    readerCatalog.refresh(selectedModuleId);
+    moduleConstraints.replaceChildren();
+    for (const rule of readerCatalog.relatedRules(selectedModuleId ?? '')) {
+      const button = document.createElement('button'); button.className = 'constraint-module-link'; button.type = 'button'; button.textContent = rule.name;
+      button.onclick = () => { readerSourcesOpen = false; showReaderConstraints(true); readerCatalog.selectRule(rule.id); constraintsPanel.querySelector<HTMLButtonElement>('.constraint-row[aria-pressed="true"]')?.focus({preventScroll:true}); };
+      moduleConstraints.append(button);
+    }
+    if (!moduleConstraints.childElementCount) { const empty = document.createElement('p'); empty.textContent = constraintText('未记录该模块的规则关联；仍可阅读完整约束目录。', 'No rule links recorded for this module; the full constraint catalog remains available.'); moduleConstraints.append(empty); }
+    syncReaderView();
+    return;
+  }
   const event = activityMode === 'architecture' ? undefined : activityEvents[activityIndex];
   const applicable = constraintRules.filter(rule => constraintApplies(rule, event));
   const open = constraintPanelOpen && workspace.classList.contains('inspector-open');

@@ -216,3 +216,15 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 [data-presentation="reader"] #constraints-panel .constraint-detail { border-left: 0; }
 [data-presentation="reader"] #constraints-panel .constraint-detail p { max-width: 75ch; font-size: 14px; line-height: 1.7; }
 [data-presentation="reader"] #constraints-panel .constraint-source blockquote { border-left: 0; }
+[data-presentation="reader"] #reader-sources-panel { padding: 20px 0 0; min-width: 0; }
+[data-presentation="reader"] .reader-catalog-tools { display: flex; flex-wrap: wrap; gap: 12px; }
+[data-presentation="reader"] :is(#constraints-panel,#reader-sources-panel) input { max-width: 100%; min-height: 36px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--reader-surface); color: inherit; font: inherit; }
+[data-presentation="reader"] .reader-source-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; }
+[data-presentation="reader"] .reader-source-list button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+[data-presentation="reader"] .reader-source-list [aria-pressed="true"] { background: var(--reader-hover); }
+[data-presentation="reader"] :is(.constraint-detail,.reader-source-detail) p { white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-presentation="reader"] :is(.constraint-detail blockquote,.reader-source-text) { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; }
+[data-presentation="reader"] .reader-source-text { margin: 0; padding: 12px 0; max-height: 70vh; overflow: auto; }
+[data-presentation="reader"] .reader-source-line { display: grid; grid-template-columns: 5ch minmax(0,1fr); }
+[data-presentation="reader"] .reader-line-number { color: var(--muted); user-select: none; }
+[data-presentation="reader"] .reader-source-line mark { color: inherit; background: var(--reader-hover); }
