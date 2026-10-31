@@ -52,6 +52,7 @@ test('doctor rejects silent, malformed and failed installed CLI responses', t =>
   fs.mkdirSync(scripts);
   fs.mkdirSync(path.join(root, 'examples'));
   fs.copyFileSync(cli, path.join(scripts, 'birdview.mjs'));
+  fs.copyFileSync(fileURLToPath(new URL('../scripts/sandbox-process.mjs', import.meta.url)), path.join(scripts, 'sandbox-process.mjs'));
   fs.writeFileSync(path.join(root, 'examples/architecture.json'), '{}');
   fs.writeFileSync(path.join(scripts, 'render.mjs'), "export const renderArchitecture = () => '<html></html>';\n");
   const cases = [

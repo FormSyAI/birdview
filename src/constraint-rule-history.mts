@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from './sandbox-process.mjs';
 import type { ConstraintRule, ReviewedConstraintCatalog, RuleHistory, TrackedRuleHistory } from './constraint-types.mjs';
 
 export function collectRuleHistory(catalog: ReviewedConstraintCatalog, repository: string): ReviewedConstraintCatalog {

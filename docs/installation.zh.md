@@ -14,6 +14,8 @@ npx skills add Qiuner/birdview --skill birdview --agent claude-code --global --c
 
 省略 `--global` 则安装到项目。这些命令安装仓库当前版本；固定版本使用下方压缩包方式。在安装器输出的目录执行 `npm ci`（包括开发依赖），再执行 `node scripts/birdview.mjs doctor`。只读自检会通过安装路径调用实际校验 CLI、检查 JSON 报告，并在内存中渲染内置示例。它不覆盖全部工作 CLI，也不验证 Agent 触发。安装器或 Agent 可能要求比 Birdview 更高的 Node.js 版本。
 
+Linux 下的子进程适配器需要 `/usr/bin/prlimit`（通常由 util-linux 提供）和可写的临时目录。它限制子进程输出，默认超时为 30 秒；缺少 `prlimit` 或临时目录不可写时，相关命令会失败。部署运行时和开发环境都需要满足这些条件。
+
 Claude Code 也支持手动安装到 `~/.claude/skills/birdview` 或 `<project-root>/.claude/skills/birdview`，按下文保留完整目录。模式命令添加 `--agent claude-code` 后写入/查询 `CLAUDE.md`，默认管理的是 `AGENTS.md`。
 
 ## DeepSeek Harness

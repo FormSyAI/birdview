@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync } from './sandbox-process.mjs';
 import { isMainModule } from './main-module.mjs';
 import { validate } from './validate.mjs';
 // Compare only declared files. Symbols and line numbers locate evidence; they do

@@ -29,6 +29,7 @@
   "scripts/main-module.mjs",
   "scripts/render.mjs",
   "scripts/render-constraints.mjs",
+  "scripts/sandbox-process.mjs",
   "scripts/validate.mjs",
   "scripts/viewer/i18n.mjs",
   "scripts/viewer/routing.mjs"

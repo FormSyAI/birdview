@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from './sandbox-process.mjs';
 import { isMainModule } from './main-module.mjs';
 import type { ConstraintCatalog, ConstraintSource, SourceSection } from './constraint-types.mjs';
 
