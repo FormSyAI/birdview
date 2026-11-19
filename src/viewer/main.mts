@@ -151,6 +151,7 @@ function applyLanguage() {
   select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
   if (reader) reflowReader();
   syncFullscreen();
+  updateZoomLabel();
   if (fitting) updateZoom();
 }
 languageSelect.onchange = () => {
@@ -296,6 +297,12 @@ let fitting = true;
 let fitAll = false;
 let floored = false;
 const viewport = query('.map-scroll');
+function updateZoomLabel() {
+  const percent = Math.round(zoom * 100);
+  const description = isChinese() ? `当前缩放 ${percent}%，点击恢复原始大小` : `Zoom ${percent}%, reset to actual size`;
+  buttonById('actual').title = description;
+  buttonById('actual').ariaLabel = description;
+}
 function updateZoom() {
   if (reader && !viewport.clientWidth) return;
   if (fitting) {
@@ -309,6 +316,7 @@ function updateZoom() {
   $('map-stage').style.width = `${width * zoom}px`;
   $('map-stage').style.height = `${height * zoom}px`;
   $('zoom-value').textContent = `${Math.round(zoom * 100)}%`;
+  updateZoomLabel();
   buttonById('zoom-in').disabled = zoom >= 2;
   buttonById('zoom-out').disabled = zoom <= .1;
   // Pressed means the whole map is on screen.

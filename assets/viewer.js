@@ -941,6 +941,7 @@ ${localized2(module, "responsibility")}`;
     select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
     if (reader) reflowReader();
     syncFullscreen();
+    updateZoomLabel();
     if (fitting) updateZoom();
   }
   languageSelect.onchange = () => {
@@ -1084,6 +1085,12 @@ ${localized2(module, "responsibility")}`;
   var fitAll = false;
   var floored = false;
   var viewport = query(".map-scroll");
+  function updateZoomLabel() {
+    const percent = Math.round(zoom * 100);
+    const description = isChinese2() ? `\u5F53\u524D\u7F29\u653E ${percent}%\uFF0C\u70B9\u51FB\u6062\u590D\u539F\u59CB\u5927\u5C0F` : `Zoom ${percent}%, reset to actual size`;
+    buttonById("actual").title = description;
+    buttonById("actual").ariaLabel = description;
+  }
   function updateZoom() {
     if (reader && !viewport.clientWidth) return;
     if (fitting) {
@@ -1096,6 +1103,7 @@ ${localized2(module, "responsibility")}`;
     $("map-stage").style.width = `${width * zoom}px`;
     $("map-stage").style.height = `${height * zoom}px`;
     $("zoom-value").textContent = `${Math.round(zoom * 100)}%`;
+    updateZoomLabel();
     buttonById("zoom-in").disabled = zoom >= 2;
     buttonById("zoom-out").disabled = zoom <= 0.1;
     $("fit").setAttribute("aria-pressed", String(fitting && !floored));
