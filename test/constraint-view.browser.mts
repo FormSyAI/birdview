@@ -31,10 +31,27 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(pathToFileURL(file).href + '#lang=zh');
   if (await page.locator('#guide-dismiss').isVisible()) await page.locator('#guide-dismiss').click();
+  const actual = page.locator('#actual');
+  await page.locator('#zoom-in').click();
+  const percentage = await page.locator('#zoom-value').textContent();
+  assert.match(await actual.getAttribute('aria-label') || '', /当前缩放 .*点击恢复原始大小/);
+  assert.ok((await actual.getAttribute('aria-label'))!.includes(percentage!));
+  assert.equal(await page.locator('#zoom-value').evaluate(el => getComputedStyle(el).userSelect), 'none');
+  await actual.focus(); await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#zoom-value').textContent(), '100%');
+  await page.locator('#language').selectOption('en');
+  assert.match(await actual.getAttribute('aria-label') || '', /Zoom 100%, reset to actual size/);
+  await page.locator('#language').selectOption('zh');
   const tabs = page.locator('#project-views button');
   await tabs.nth(1).click();
   const graph = page.locator('#constraint-view');
   await graph.locator('.cv-card').first().waitFor();
+  const help = graph.locator('.cv-help');
+  assert.equal(await help.evaluate(el => getComputedStyle(el).userSelect), 'none');
+  const helpBox = await help.boundingBox(); assert.ok(helpBox);
+  await page.mouse.move(helpBox.x + 2, helpBox.y + helpBox.height / 2);
+  await page.mouse.down(); await page.mouse.move(helpBox.x + helpBox.width - 2, helpBox.y + helpBox.height / 2, { steps: 8 }); await page.mouse.up();
+  assert.equal(await page.evaluate(() => window.getSelection()?.toString() || ''), '');
   const cardSize = await graph.locator('.cv-card').first().boundingBox();
   assert.ok(cardSize && cardSize.width > 150 && cardSize.height >= 75 && cardSize.height <= 77);
   await graph.locator('.cv-card[data-id="category-testing"]').click();
@@ -47,6 +64,7 @@ try {
   await graph.locator('.cv-search').fill('检查1');
   await graph.locator('.cv-tree-row[data-id="check-1"]').click();
   assert.match(await graph.locator('.cv-reader-body').textContent() || '', /Check work/);
+  assert.notEqual(await graph.locator('.cv-reader-body').evaluate(el => getComputedStyle(el).userSelect), 'none');
   await graph.locator('.cv-card[data-id="check-1"]').press('Shift+Enter');
   assert.equal(await graph.locator('.cv-dialog').isVisible(), true);
   await page.keyboard.press('Escape');
@@ -66,12 +84,18 @@ try {
   await page.goto(pathToFileURL(branchFile).href);
   const testing = page.locator('.cv-card[data-id="category-testing"]');
   const position = await testing.boundingBox();
+  assert.ok(position);
+  async function assertUnmoved() {
+    const current = await testing.boundingBox(); assert.ok(current);
+    for (const key of ['x', 'y', 'width', 'height'] as const)
+      assert.ok(Math.abs(current[key] - position![key]) < 0.5, `${key} moved: ${current[key]} vs ${position![key]}`);
+  }
   await testing.click();
-  assert.deepEqual(await testing.boundingBox(), position);
+  await assertUnmoved();
   await page.locator('.cv-card[data-id="category-security"]').click();
   assert.equal(await page.locator('.cv-card[data-id="check-0"]').count(), 0);
   assert.equal(await page.locator('.cv-card[data-id="secure-check"]').count(), 1);
-  assert.deepEqual(await testing.boundingBox(), position);
+  await assertUnmoved();
   await testing.dblclick();
   assert.equal(await page.locator('.cv-dialog').isVisible(), true);
   await page.locator('.cv-dialog-close').click();

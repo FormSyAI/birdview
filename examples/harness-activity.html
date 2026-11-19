@@ -166,7 +166,7 @@ SOFTWARE.
     .workspace aside{min-height:0;height:100%;max-height:100%;overflow:auto;box-sizing:border-box;overscroll-behavior:contain}
     @media(max-width:1000px){.workspace.inspector-open aside{position:absolute;right:0;top:0;bottom:0;width:min(25.7143rem,100%);z-index:5;background:#202626;box-shadow:-0.5714rem 0 1.7143rem #0002}[data-theme="light"] .workspace.inspector-open aside{background:#fff}}
     @media(max-width:800px){.map-heading{padding:0.5714rem 0}.legend{max-height:4.5714rem}.activity-panel{max-height:26%}}
-    .map-heading{gap:0.8571rem;padding:0.7143rem 0}.map-tools{gap:0.8571rem}.relation-tools,.zoom-tools{display:flex;align-items:center;gap:0.2857rem}.zoom-tools{border-left:1px solid var(--line);padding-left:0.8571rem}#actual{width:3.4286rem}#zoom-value{width:auto;pointer-events:none}#show-details{margin-left:0;border-left-width:2px}
+    .map-heading{gap:0.8571rem;padding:0.7143rem 0}.map-tools{gap:0.8571rem}.relation-tools,.zoom-tools{display:flex;align-items:center;gap:0.2857rem}.zoom-tools{border-left:1px solid var(--line);padding-left:0.8571rem}#actual{width:3.4286rem;user-select:none}#zoom-value{width:auto;pointer-events:none;user-select:none}#show-details{margin-left:0;border-left-width:2px}
     .activity-toolbar{flex-wrap:nowrap;gap:1.1429rem}.activity-history{order:2;flex-shrink:0;margin-left:auto;width:auto}.activity-toolbar #activity-summary{order:1;margin:0;min-width:0;font-size:0.8571rem;line-height:1.5}.activity-panel{padding:0.7143rem 0}#activity-disclosure{margin-top:0.4286rem}
     .legend{gap:0.8571rem;align-items:center}.legend .role-legend{width:auto;border:0;padding:0;gap:0.8571rem}.legend>span:last-child{gap:0.7143rem}#relation-count{margin:0 0 0 auto;white-space:nowrap}
     @media(max-width:1100px){.map-tools{gap:0.5714rem}.zoom-tools{padding-left:0.5714rem}.activity-toolbar{flex-wrap:wrap}.activity-toolbar #activity-summary{flex-basis:100%}.activity-history{order:0;margin-left:0}.map-heading #activity-mode{width:auto}}
@@ -1270,6 +1270,7 @@ ${localized2(module, "responsibility")}`;
     select(map.modules.find((module) => module.id === selectedModuleId) || required(map.modules[0]));
     if (reader) reflowReader();
     syncFullscreen();
+    updateZoomLabel();
     if (fitting) updateZoom();
   }
   languageSelect.onchange = () => {
@@ -1413,6 +1414,12 @@ ${localized2(module, "responsibility")}`;
   var fitAll = false;
   var floored = false;
   var viewport = query(".map-scroll");
+  function updateZoomLabel() {
+    const percent = Math.round(zoom * 100);
+    const description = isChinese2() ? `\u5F53\u524D\u7F29\u653E ${percent}%\uFF0C\u70B9\u51FB\u6062\u590D\u539F\u59CB\u5927\u5C0F` : `Zoom ${percent}%, reset to actual size`;
+    buttonById("actual").title = description;
+    buttonById("actual").ariaLabel = description;
+  }
   function updateZoom() {
     if (reader && !viewport.clientWidth) return;
     if (fitting) {
@@ -1425,6 +1432,7 @@ ${localized2(module, "responsibility")}`;
     $("map-stage").style.width = `${width * zoom}px`;
     $("map-stage").style.height = `${height * zoom}px`;
     $("zoom-value").textContent = `${Math.round(zoom * 100)}%`;
+    updateZoomLabel();
     buttonById("zoom-in").disabled = zoom >= 2;
     buttonById("zoom-out").disabled = zoom <= 0.1;
     $("fit").setAttribute("aria-pressed", String(fitting && !floored));
