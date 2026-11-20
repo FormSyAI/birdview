@@ -184,11 +184,14 @@ $('theme').onclick = () => {
   themeButton();
 };
 themeButton();
+// Reader hides the duplicate header; keep standalone theme control available.
+if (reader) query('main').prepend($('theme'));
 // The embedding workbench owns appearance. Accept only a theme value from the
 // direct parent; this channel cannot change graph data or execute actions.
 if (reader) window.addEventListener('message', event => {
   if (event.source !== window.parent || event.data?.type !== 'birdview:theme' || !['dark', 'light'].includes(event.data.theme)) return;
   document.documentElement.dataset.theme = event.data.theme;
+  if (event.data.managed === true) $('theme').hidden = true;
   themeButton();
   requestAnimationFrame(reportReaderSize);
 });
@@ -1403,12 +1406,21 @@ applyLanguage();
 const guideKey = 'birdview-guide-v1';
 const guideLaunch = document.createElement('button');
 guideLaunch.id = 'guide-launch';
-query('.header-actions').append(guideLaunch);
+if (reader) query('main').prepend(guideLaunch);
+else query('.header-actions').append(guideLaunch);
 const guideInvite = document.createElement('div');
 guideInvite.id = 'guide-invite';
 guideInvite.innerHTML = '<span></span><button id="guide-start"></button><button id="guide-dismiss"></button>';
 query('main').prepend(guideInvite);
 try { guideInvite.hidden = localStorage.getItem(guideKey) === 'seen'; } catch {}
+// An embedding host can provide persistent preference when the sandbox has an opaque origin.
+if (reader && window.parent !== window) {
+  window.addEventListener('message', event => {
+    if (event.source !== window.parent || event.data?.type !== 'birdview:guide-state' || typeof event.data.seen !== 'boolean') return;
+    if (event.data.seen) guideInvite.hidden = true;
+  });
+  window.parent.postMessage({type: 'birdview:guide-ready'}, '*');
+}
 const guideDialog = document.createElement('dialog');
 guideDialog.id = 'guide-dialog';
 guideDialog.setAttribute('aria-labelledby', 'guide-title');
@@ -1533,6 +1545,7 @@ function showGuideStep(animate = false) {
 function dismissGuideInvite() {
   guideInvite.hidden = true;
   try { localStorage.setItem(guideKey, 'seen'); } catch {}
+  if (reader && window.parent !== window) window.parent.postMessage({type: 'birdview:guide-seen'}, '*');
 }
 function startGuide() {
   if (guideDialog.open) return;

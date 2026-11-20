@@ -13,7 +13,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push(error.stack || error.message));
   const file = path.join(dir, 'guide.html');
   fs.writeFileSync(file, renderArchitecture(map, events));
   await page.goto(pathToFileURL(file).href + '#lang=zh');
@@ -59,6 +59,42 @@ try {
   await page.locator('#guide-next').click();
   await page.locator('#guide-skip').click();
   assert.equal(await page.locator('#guide-dialog').isVisible(), false);
+  // Standalone reader keeps its own theme control and can reopen the guide.
+  fs.writeFileSync(file, renderArchitecture(map, events, {presentation: 'reader'}));
+  await page.goto(pathToFileURL(file).href);
+  assert.equal(await page.locator('#theme').isVisible(), true);
+  const priorTheme = await page.locator('html').getAttribute('data-theme');
+  await page.locator('#theme').click();
+  assert.notEqual(await page.locator('html').getAttribute('data-theme'), priorTheme);
+  assert.equal(await page.locator('#guide-launch').isVisible(), true);
+  // An opaque sandbox cannot persist localStorage; its direct host owns the preference.
+  const readerHtml = renderArchitecture(map, events, {presentation: 'reader'});
+  const embeddedPage = await browser.newPage();
+  await embeddedPage.setContent('<iframe sandbox="allow-scripts"></iframe>');
+  await embeddedPage.evaluate((html) => {
+    const frame = document.querySelector('iframe')!;
+    let seen = false;
+    window.addEventListener('message', event => {
+      if (event.source !== frame.contentWindow) return;
+      if (event.data?.type === 'birdview:guide-seen') seen = true;
+      if (event.data?.type === 'birdview:guide-ready') {
+        frame.contentWindow!.postMessage({type: 'birdview:guide-state', seen}, '*');
+        frame.contentWindow!.postMessage({type: 'birdview:theme', theme: 'light', managed: true}, '*');
+      }
+    });
+    frame.srcdoc = html;
+  }, readerHtml);
+  const embedded = embeddedPage.frameLocator('iframe');
+  await embedded.locator('#guide-dismiss').click();
+  await embeddedPage.waitForTimeout(100);
+  await embeddedPage.evaluate(() => { const frame = document.querySelector('iframe')!; frame.srcdoc = frame.srcdoc; });
+  await embedded.locator('#guide-launch').waitFor();
+  await embeddedPage.waitForTimeout(100);
+  assert.equal(await embedded.locator('#guide-invite').isVisible(), false);
+  assert.equal(await embedded.locator('#theme').isVisible(), false);
+  await embedded.locator('#guide-launch').click();
+  assert.equal(await embedded.locator('#guide-dialog').isVisible(), true);
+  await embeddedPage.close();
   assert.deepEqual(errors, []);
   console.log('Guide: 5/2 steps, Chinese/English, desktop/mobile, completion/Escape, state/focus restoration and persistent dismissal passed.');
 } finally {

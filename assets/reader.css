@@ -27,8 +27,7 @@ html[data-presentation="reader"], [data-presentation="reader"] body {
 }
 [data-presentation="reader"] body { display: flow-root; min-width: 0; }
 /* The workbench already supplies identity, appearance and return navigation. */
-[data-presentation="reader"] body > header,
-[data-presentation="reader"] :is(#guide-invite,#guide-launch) { display: none; }
+[data-presentation="reader"] body > header { display: none; }
 [data-presentation="reader"] body > main {
   display: block;
   height: auto;
