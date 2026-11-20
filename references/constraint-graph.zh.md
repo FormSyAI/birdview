@@ -85,7 +85,7 @@ node scripts/birdview.mjs deliver architecture.json project.html --constraints v
 
 `render-constraints.mjs` 接受 `birdview.constraint-catalog/v1`，默认生成**规则图**：项目 → 类别 → 可选的人类语义主题 → 规则。六种类别为 `lifecycle`、`interfaces`、`configuration`、`security`、`testing`、`delivery`。主题使用编号和文字；颜色按架构角色统一：frontend 蓝、backend 青绿、cache 青、database 紫、queue 琥珀、security 玫瑰、generic 灰蓝。规则可填 targetRole；非通用角色必须给 roleReason 来源依据。跨角色或不明确时保持 generic，不根据主题名猜测角色。同角色分组沿用该色，混合分组为通用色。工具栏角色图例显示规则数量；卡片同时显示规则编号和角色文字。适用性和核验结果在详情独立显示，颜色不表达通过或失败。标题应简洁并表达可执行要求；卡片最多显示两行，悬停提示和阅读面板保留完整标题。通过主题分组控制每层阅读量，通常不超过八个子节点。文件时间/版本和采集数量不占规则卡片，不把成千上万个统一待定的来源节点作为主视图。
 
-渲染器使用 Birdview 自有 HTML 卡片、SVG 连线和子树布局，不依赖第三方图运行时。`constraint-canvas.js` 在独立和集成页面挂载同一组件；`constraint-page.html` 提供独立页面外壳；`constraint-canvas.css` 将样式限定在约束视图。`buildConstraintGraph()` 准备 `birdview.constraint-view/v1` 展示数据，不改变输入清单契约。详情先呈现适用条件、解释和验证计划，再展示来源依据与规则历史。文档按安全文本和基础标题、引文渲染，不执行任意 HTML 或嵌入图表。全部已采集来源（包括未审查的 skills 与引用文档）显示在“按目录”；双击来源文件阅读原文和审查状态。覆盖情况仍在“阅读范围”。工具栏不再跳转其他页面。独立来源索引导出和 `--sources` 选项已移除。已有本地导出不会自动删除。
+渲染器使用 Birdview 自有 HTML 卡片、SVG 连线和子树布局，不依赖第三方图运行时。`constraint-canvas.js` 在独立和集成页面挂载同一组件；`constraint-page.html` 提供独立页面外壳；`constraint-canvas.css` 将样式限定在约束视图。`buildConstraintGraph()` 准备 `birdview.constraint-view/v1` 展示数据，不改变输入清单契约。详情先呈现适用条件、解释和验证计划，再展示来源依据与规则历史。文档按安全文本和基础标题、引文渲染，不执行任意 HTML 或嵌入图表。全部已采集来源（包括未审查的 skills 与引用文档）显示在“按目录”；单击来源文件阅读原文和审查状态。覆盖情况仍在“阅读范围”。工具栏不再跳转其他页面。独立来源索引导出和 `--sources` 选项已移除。已有本地导出不会自动删除。
 
 打开 HTML，在桌面和窄屏检查展开、原文阅读、长内容及覆盖披露。报告实际采集数量、未解决/排除范围、语义审查状态和执行过的测试。来源采集完整不等于生效规则审查完整，分别说明。页面离线只读，不是实时监控或执行拦截器。生成的原生页面包含 Birdview 许可；保留实际分发依赖的许可证。
 
@@ -94,4 +94,4 @@ node scripts/birdview.mjs deliver architecture.json project.html --constraints v
 
 ## 目录与主题视图
 
-已审查规则图提供“按主题”和“按目录”，共用规则 ID、版本与正文。分组前发现根目录和嵌套指令文件。目录节点依据已记录来源作用域列出本目录来源和上级指令候选；仅凭存放路径不能证明适用性、覆盖或冲突解决。Skills 与引用文档需审查调用和引用关系。已采集但未提炼规则的指令文件也应显示，明确提炼缺口。目录位置表达来源，不代表模块所有权。切换视图时保留模块筛选。双击节点或 Shift+Enter 打开共享详情弹窗。
+已审查规则图提供“按主题”和“按目录”，共用规则 ID、版本与正文。分组前发现根目录和嵌套指令文件。目录节点依据已记录来源作用域列出本目录来源和上级指令候选；仅凭存放路径不能证明适用性、覆盖或冲突解决。Skills 与引用文档需审查调用和引用关系。已采集但未提炼规则的指令文件也应显示，明确提炼缺口。目录位置表达来源，不代表模块所有权。切换视图时保留模块筛选。单击叶子节点或按 Shift+Enter，在侧栏阅读详情。

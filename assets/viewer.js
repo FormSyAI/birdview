@@ -318,34 +318,6 @@
     const readerBody = element2("div", "cv-reader-body");
     readerHeader.append(readerTitle, readerClose);
     reader2.append(readerHeader, readerMeta, readerBody);
-    const dialog = element2("dialog", "cv-dialog");
-    const dialogTitle = element2("h2", "cv-dialog-title");
-    const dialogClose = button("cv-dialog-close", "\xD7", () => dialog.close());
-    const dialogHeader = element2("div", "cv-reader-header");
-    dialogHeader.append(dialogTitle, dialogClose);
-    const dialogContent = element2("div", "cv-dialog-content");
-    dialog.append(dialogHeader, dialogContent);
-    root.append(dialog);
-    dialog.setAttribute("aria-label", text("\u8BE6\u7EC6\u8BF4\u660E", "Detailed explanation"));
-    dialogClose.ariaLabel = text("\u5173\u95ED\u8BE6\u60C5", "Close details");
-    dialog.addEventListener("click", (event) => {
-      if (event.target !== dialog) return;
-      const rect = dialog.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-    });
-    dialog.addEventListener("keydown", (event) => event.stopPropagation());
-    dialog.addEventListener("close", () => focusButton());
-    let lastCardClick = { id: null, time: 0 };
-    function openDialog(id) {
-      const wasHidden = reader2.hidden;
-      showDetails2(id);
-      dialogTitle.textContent = readerTitle.textContent;
-      dialogContent.replaceChildren(readerMeta.cloneNode(true), readerBody.cloneNode(true));
-      reader2.hidden = wasHidden;
-      dialog.showModal();
-      dialogContent.scrollTop = 0;
-      dialogClose.focus();
-    }
     workspace2.append(directory, viewport2, reader2);
     const legend = element2("section", "cv-legend");
     legend.hidden = true;
@@ -360,7 +332,6 @@
         children.set(node.id, []);
       }
       for (const node of data.nodes) if (node.parent) children.get(node.parent)?.push(node.id);
-      if (dialog.open) dialog.close();
       api.filter(filteredRules);
     };
     function allowed(id) {
@@ -558,20 +529,8 @@
           else if (focusing && (!focus.has(id) || !focus.has(node.parent))) edge.classList.add("cv-muted-branch");
           svg.append(edge);
         }
-        const card = button("cv-card", "", (event) => {
-          const now = performance.now();
-          if (event.detail && lastCardClick.id === id && now - lastCardClick.time < 400) {
-            lastCardClick = { id: null, time: 0 };
-            openDialog(id);
-            return;
-          }
-          lastCardClick = { id, time: now };
-          activate(id);
-        });
+        const card = button("cv-card", "", () => activate(id));
         card.dataset.id = id;
-        card.ondblclick = () => {
-          if (!dialog.open) openDialog(id);
-        };
         if (focusing && !focus.has(id)) card.classList.add("cv-muted-branch");
         card.style.left = point.x + "px";
         card.style.top = point.y + "px";
@@ -589,7 +548,8 @@
         card.onkeydown = (event) => {
           if (event.key === "Enter" && event.shiftKey) {
             event.preventDefault();
-            openDialog(id);
+            showDetails2(id);
+            readerClose.focus();
           }
           if (event.key === "ArrowRight" && list.length) {
             event.preventDefault();
@@ -714,8 +674,7 @@
     };
     root.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
-      if (dialog.open) dialog.close();
-      else if (!legend.hidden) {
+      if (!legend.hidden) {
         legend.hidden = true;
         legendButton.setAttribute("aria-expanded", "false");
         legendButton.focus();
@@ -725,7 +684,6 @@
     const api = {
       filter(ids) {
         filteredRules = ids ? [...ids] : null;
-        lastCardClick = { id: null, time: 0 };
         filterIds = ids ? /* @__PURE__ */ new Set() : null;
         if (filterIds) for (const id of ids || []) ancestors(id, filterIds);
         selected = top;
@@ -777,10 +735,8 @@
       legendButton.setAttribute("aria-expanded", String(!legend.hidden));
       coverageButton.textContent = text("\u9605\u8BFB\u8303\u56F4", "Coverage");
       readerClose.ariaLabel = text("\u5173\u95ED\u8BE6\u60C5", "Close details");
-      dialogClose.ariaLabel = readerClose.ariaLabel;
-      dialog.setAttribute("aria-label", text("\u8BE6\u7EC6\u8BF4\u660E", "Detailed explanation"));
       viewport2.ariaLabel = text("\u7EA6\u675F\u56FE\u753B\u5E03\uFF1B\u65B9\u5411\u952E\u5E73\u79FB\uFF0C\u52A0\u51CF\u952E\u7F29\u653E\uFF0C0 \u9002\u914D", "Constraint canvas; arrows to pan, plus/minus to zoom, 0 to fit");
-      help.textContent = text("\u62D6\u52A8\u5E73\u79FB \xB7 Ctrl + \u6EDA\u8F6E\u7F29\u653E \xB7 \u53CC\u51FB / Shift+Enter \u9605\u8BFB\u8BE6\u60C5", "Drag to pan \xB7 Ctrl + scroll to zoom \xB7 Double-click / Shift+Enter for details");
+      help.textContent = text("\u62D6\u52A8\u5E73\u79FB \xB7 Ctrl + \u6EDA\u8F6E\u7F29\u653E \xB7 \u5355\u51FB / Shift+Enter \u9605\u8BFB\u8BE6\u60C5", "Drag to pan \xB7 Ctrl + scroll to zoom \xB7 Click / Shift+Enter for details");
       legend.replaceChildren(element2("strong", "", text("\u9002\u7528\u89D2\u8272", "Applicable roles")));
       const en = { frontend: "Frontend", backend: "Backend", cache: "Cache", database: "Data store", queue: "Tasks / Queue", security: "Security", generic: "Generic" };
       for (const [id, role] of Object.entries(data.roles || {})) {
@@ -1321,10 +1277,9 @@ ${module.responsibility}`;
       button.setAttribute("aria-label", `${module.name}\uFF0C\u5F85\u786E\u8BA4`);
     }
     button.onclick = () => {
-      if (constraintPanelOpen) {
-        constraintFilter = "module";
-        selectedConstraintId = void 0;
-      }
+      if (constraintPanelOpen) constraintFilter = "module";
+      constraintPanelOpen = false;
+      selectedConstraintId = void 0;
       select(module);
       setInspector(true);
     };
@@ -1948,6 +1903,15 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
   moduleContent.id = "module-content";
   moduleContent.append(...[...inspector.children].filter((child) => child !== closeDetails));
   inspector.append(moduleContent);
+  var detailHeader = document.createElement("div");
+  detailHeader.className = "module-detail-header";
+  var detailHeading = document.createElement("div");
+  detailHeading.className = "module-detail-heading";
+  var eyebrow = moduleContent.querySelector(".eyebrow");
+  if (eyebrow) detailHeading.append(eyebrow);
+  detailHeading.append($("module-name"), moduleMeta);
+  detailHeader.append(detailHeading, closeDetails);
+  inspector.prepend(detailHeader);
   var moduleConstraints = document.createElement("section");
   moduleConstraints.id = "module-constraints";
   moduleConstraints.className = "detail";
@@ -2026,8 +1990,11 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     setInspector(open);
   };
   closeDetails.onclick = () => {
+    const returnTo = constraintPanelOpen ? constraintButton : showDetails;
+    constraintPanelOpen = false;
+    selectedConstraintId = void 0;
     setInspector(false);
-    (constraintPanelOpen ? constraintButton : showDetails).focus();
+    returnTo.focus();
   };
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && workspace.classList.contains("inspector-open") && !document.querySelector("dialog[open]")) closeDetails.click();
@@ -2063,6 +2030,7 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
     constraintButton.ariaLabel = reader ? constraintText("\u7EA6\u675F", "Constraints") : constraintButton.title;
     constraintButton.setAttribute("aria-expanded", String(open));
     workspace.classList.toggle("constraints-open", open);
+    detailHeading.hidden = constraintPanelOpen;
     moduleContent.hidden = constraintPanelOpen;
     constraintsPanel.hidden = !constraintPanelOpen;
     moduleConstraints.replaceChildren();
@@ -2092,15 +2060,15 @@ ${check.status} \xB7 exit ${check.exitCode ?? "-"} \xB7 ${localized2(check, "sum
       moduleConstraints.append(empty);
     }
     constraintsPanel.replaceChildren();
-    const eyebrow = document.createElement("div");
-    eyebrow.className = "eyebrow";
-    eyebrow.textContent = constraintText("\u89C4\u5219\u4E0E\u4F9D\u636E", "RULES & EVIDENCE");
+    const eyebrow2 = document.createElement("div");
+    eyebrow2.className = "eyebrow";
+    eyebrow2.textContent = constraintText("\u89C4\u5219\u4E0E\u4F9D\u636E", "RULES & EVIDENCE");
     const heading = document.createElement("h2");
     heading.textContent = constraintText("\u7EA6\u675F", "Constraints");
     const context = document.createElement("p");
     context.className = "constraint-context";
     context.textContent = event ? `${event.taskId} \xB7 ${constraintText("\u6B65\u9AA4", "Step")} ${event.sequence}` : constraintText("\u9879\u76EE\u67B6\u6784\u5FEB\u7167", "Project architecture snapshot");
-    if (!reader) constraintsPanel.append(eyebrow);
+    if (!reader) constraintsPanel.append(eyebrow2);
     constraintsPanel.append(heading, context);
     const freshness = DATA.constraintFreshness;
     const snapshot = document.createElement("div");

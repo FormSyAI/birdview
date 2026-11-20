@@ -26,10 +26,12 @@ try {
       const result = await page.evaluate(() => {
         const aside = document.querySelector('aside');
         if (!aside) throw new Error('Missing inspector');
-        aside.scrollTop = 100;
+        const details = document.querySelector<HTMLElement>('#module-content');
+        if (!details) throw new Error('Missing detail body');
+        details.scrollTop = 100;
         const view = document.getElementById('map-stage')?.parentElement;
         if (!view) throw new Error('Missing map stage');
-        return { page: document.documentElement.scrollHeight, width: document.documentElement.scrollWidth, asideScroll: aside.scrollTop, mapHeight: view.clientHeight, bottom: aside.getBoundingClientRect().bottom };
+        return { page: document.documentElement.scrollHeight, width: document.documentElement.scrollWidth, asideScroll: details.scrollTop, mapHeight: view.clientHeight, bottom: aside.getBoundingClientRect().bottom };
       });
       assert.ok(result.page <= height + 1 && result.width <= width + 1, JSON.stringify(result));
       assert.ok(result.asideScroll > 0 && result.bottom <= height && result.mapHeight > 40, JSON.stringify(result));

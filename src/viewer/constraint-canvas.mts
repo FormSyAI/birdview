@@ -78,32 +78,6 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
   const readerMeta = element('p', 'cv-reader-meta');
   const readerBody = element('div', 'cv-reader-body');
   readerHeader.append(readerTitle, readerClose); reader.append(readerHeader, readerMeta, readerBody);
-  const dialog = element('dialog', 'cv-dialog');
-  const dialogTitle = element('h2', 'cv-dialog-title');
-  const dialogClose = button('cv-dialog-close', '×', () => dialog.close());
-  const dialogHeader = element('div', 'cv-reader-header');
-  dialogHeader.append(dialogTitle, dialogClose);
-  const dialogContent = element('div', 'cv-dialog-content');
-  dialog.append(dialogHeader, dialogContent); root.append(dialog);
-  dialog.setAttribute('aria-label', text('详细说明', 'Detailed explanation'));
-  dialogClose.ariaLabel = text('关闭详情', 'Close details');
-  dialog.addEventListener('click', event => {
-    if (event.target !== dialog) return;
-    const rect = dialog.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-  });
-  dialog.addEventListener('keydown', event => event.stopPropagation());
-  dialog.addEventListener('close', () => focusButton());
-  let lastCardClick: { id: string | null; time: number } = { id: null, time: 0 };
-  function openDialog(id: string): void {
-    const wasHidden = reader.hidden;
-    showDetails(id);
-    dialogTitle.textContent = readerTitle.textContent;
-    dialogContent.replaceChildren(readerMeta.cloneNode(true), readerBody.cloneNode(true));
-    reader.hidden = wasHidden;
-    dialog.showModal(); dialogContent.scrollTop = 0;
-    dialogClose.focus();
-  }
   workspace.append(directory, viewport, reader);
   const legend = element('section', 'cv-legend'); legend.hidden = true;
   root.append(toolbar, workspace, legend);
@@ -113,7 +87,6 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
     nodes.clear(); children.clear();
     for (const node of data.nodes) { nodes.set(node.id, node); children.set(node.id, []); }
     for (const node of data.nodes) if (node.parent) children.get(node.parent)?.push(node.id);
-    if (dialog.open) dialog.close();
     api.filter(filteredRules);
   };
 
@@ -272,14 +245,7 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
         else if (focusing && (!focus.has(id) || !focus.has(node.parent!))) edge.classList.add('cv-muted-branch');
         svg.append(edge);
       }
-      const card = button('cv-card', '', event => {
-        const now = performance.now();
-        if (event.detail && lastCardClick.id === id && now - lastCardClick.time < 400) {
-          lastCardClick = { id: null, time: 0 }; openDialog(id); return;
-        }
-        lastCardClick = { id, time: now }; activate(id);
-      }); card.dataset.id = id;
-      card.ondblclick = () => { if (!dialog.open) openDialog(id); };
+      const card = button('cv-card', '', () => activate(id)); card.dataset.id = id;
       if (focusing && !focus.has(id)) card.classList.add('cv-muted-branch');
       card.style.left = point.x + 'px'; card.style.top = point.y + 'px'; roleStyle(node, card);
       card.title = node.title + '\n' + node.desc; card.setAttribute('aria-current', String(selected === id));
@@ -291,7 +257,7 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
         card.append(element('span', 'cv-expand-count', `${expanded.has(id) || query ? '−' : '+'}${list.length}`));
       }
       card.onkeydown = (event: KeyboardEvent) => {
-        if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); openDialog(id); }
+        if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); showDetails(id); readerClose.focus(); }
         if (event.key === 'ArrowRight' && list.length) { event.preventDefault(); expanded.clear(); ancestors(id, expanded); selected = list[0]!; render(); focusSelected(); focusButton(); }
         if (event.key === 'ArrowLeft' && node.parent) { event.preventDefault(); selected = node.parent; expanded.clear(); ancestors(selected, expanded); render(); focusSelected(); focusButton(); }
       };
@@ -365,15 +331,13 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
   };
   root.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    if (dialog.open) dialog.close();
-    else if (!legend.hidden) { legend.hidden = true; legendButton.setAttribute('aria-expanded', 'false'); legendButton.focus(); }
+    if (!legend.hidden) { legend.hidden = true; legendButton.setAttribute('aria-expanded', 'false'); legendButton.focus(); }
     else if (!reader.hidden) readerClose.click();
     else if (!directory.hidden && matchMedia('(max-width:700px)').matches) directoryClose.click();
   });
   const api: ConstraintCanvas = {
     filter(ids: string[] | null) {
       filteredRules = ids ? [...ids] : null;
-      lastCardClick = { id: null, time: 0 };
       filterIds = ids ? new Set<string>() : null;
       if (filterIds) for (const id of ids || []) ancestors(id, filterIds);
       selected = top; expanded.clear(); expanded.add(top); reader.hidden = true; search.value = ''; query = ''; matching = null; searchMessage = '';
@@ -398,10 +362,8 @@ export function mountConstraintCanvas(container: HTMLElement, data: ConstraintGr
     legendButton.textContent = text('角色图例', 'Role legend'); legendButton.hidden = !data.roles; legendButton.setAttribute('aria-expanded', String(!legend.hidden));
     coverageButton.textContent = text('阅读范围', 'Coverage');
     readerClose.ariaLabel = text('关闭详情', 'Close details');
-    dialogClose.ariaLabel = readerClose.ariaLabel;
-    dialog.setAttribute('aria-label', text('详细说明', 'Detailed explanation'));
     viewport.ariaLabel = text('约束图画布；方向键平移，加减键缩放，0 适配', 'Constraint canvas; arrows to pan, plus/minus to zoom, 0 to fit');
-    help.textContent = text('拖动平移 · Ctrl + 滚轮缩放 · 双击 / Shift+Enter 阅读详情', 'Drag to pan · Ctrl + scroll to zoom · Double-click / Shift+Enter for details');
+    help.textContent = text('拖动平移 · Ctrl + 滚轮缩放 · 单击 / Shift+Enter 阅读详情', 'Drag to pan · Ctrl + scroll to zoom · Click / Shift+Enter for details');
     legend.replaceChildren(element('strong', '', text('适用角色', 'Applicable roles')));
     const en: Record<ConstraintRole, string> = { frontend: 'Frontend', backend: 'Backend', cache: 'Cache', database: 'Data store', queue: 'Tasks / Queue', security: 'Security', generic: 'Generic' };
     for (const [id, role] of Object.entries(data.roles || {}) as Array<[ConstraintRole, NonNullable<ConstraintGraph['roles']>[ConstraintRole]]>) {
