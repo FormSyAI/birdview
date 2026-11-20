@@ -135,6 +135,13 @@
     :root:fullscreen .map-heading{position:sticky;top:0;z-index:8;background:var(--reader-surface,#202626)}
     :root[data-theme="light"]:fullscreen .map-heading{background:var(--reader-surface,#fafbfa)}
 /* BIRDVIEW_HOST_CSS */
+    /* Keep module identity and close action visible while long details scroll. */
+    .workspace.inspector-open aside{display:flex;flex-direction:column;max-height:min(75vh,800px);overflow:hidden}
+    .module-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex:none}
+    .module-detail-heading{min-width:0;overflow-wrap:anywhere}
+    .module-detail-heading[hidden]{display:none}
+    .module-detail-header #close-details{float:none;flex:none}
+    #module-content,#constraints-panel{min-height:0;overflow:auto;overscroll-behavior:contain}
   </style>
 </head>
 <body>

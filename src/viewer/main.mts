@@ -522,7 +522,8 @@ for (const module of map.modules) {
     button.setAttribute('aria-label', `${module.name}，待确认`);
   }
   button.onclick = () => {
-    if (constraintPanelOpen) { constraintFilter = 'module'; selectedConstraintId = undefined; }
+    if (constraintPanelOpen) constraintFilter = 'module';
+    constraintPanelOpen = false; selectedConstraintId = undefined;
     select(module); setInspector(true);
   };
   button.onpointerenter = (event) => {
@@ -1110,6 +1111,15 @@ const moduleContent = document.createElement('div');
 moduleContent.id = 'module-content';
 moduleContent.append(...[...inspector.children].filter(child => child !== closeDetails));
 inspector.append(moduleContent);
+const detailHeader = document.createElement('div');
+detailHeader.className = 'module-detail-header';
+const detailHeading = document.createElement('div');
+detailHeading.className = 'module-detail-heading';
+const eyebrow = moduleContent.querySelector('.eyebrow');
+if (eyebrow) detailHeading.append(eyebrow);
+detailHeading.append($('module-name'), moduleMeta);
+detailHeader.append(detailHeading, closeDetails);
+inspector.prepend(detailHeader);
 const moduleConstraints = document.createElement('section');
 moduleConstraints.id = 'module-constraints';
 moduleConstraints.className = 'detail';
@@ -1185,8 +1195,10 @@ showDetails.onclick = () => {
   setInspector(open);
 };
 closeDetails.onclick = () => {
+  const returnTo = constraintPanelOpen ? constraintButton : showDetails;
+  constraintPanelOpen = false; selectedConstraintId = undefined;
   setInspector(false);
-  (constraintPanelOpen ? constraintButton : showDetails).focus();
+  returnTo.focus();
 };
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && workspace.classList.contains('inspector-open') && !document.querySelector('dialog[open]')) closeDetails.click();
@@ -1233,6 +1245,7 @@ function updateConstraints() {
   constraintButton.ariaLabel = reader ? constraintText('约束', 'Constraints') : constraintButton.title;
   constraintButton.setAttribute('aria-expanded', String(open));
   workspace.classList.toggle('constraints-open', open);
+  detailHeading.hidden = constraintPanelOpen;
   moduleContent.hidden = constraintPanelOpen;
   constraintsPanel.hidden = !constraintPanelOpen;
   moduleConstraints.replaceChildren();

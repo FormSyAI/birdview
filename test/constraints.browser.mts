@@ -60,8 +60,25 @@ try {
   assert.match(present(await page.locator('.constraint-empty').textContent()), /未记录约束/);
   await page.locator('#constraint-filter').selectOption('module');
   await page.locator('#map [data-module="tools"]').click();
-  assert.equal(await page.locator('.constraint-row').count(), 5);
-  await page.locator('#show-details').click();
+  assert.equal(await page.locator('#module-content').isVisible(), true);
+  assert.equal(await page.locator('#constraints-panel').isVisible(), false);
+  // Closing the constraints view and selecting a module must not reopen constraints.
+  await page.locator('#show-constraints').click();
+  await page.locator('#close-details').click();
+  assert.equal(await page.locator('#show-constraints').evaluate(el => el === document.activeElement), true);
+  await page.locator('#map [data-module="tools"]').click();
+  assert.equal(await page.locator('#module-content').isVisible(), true);
+  assert.equal(await page.locator('#constraints-panel').isVisible(), false);
+  // A long body scrolls inside the panel while its identity and close control stay fixed.
+  const panel = page.locator('#module-content');
+  await panel.evaluate(el => { const extra = document.createElement('p'); extra.textContent = '长内容 '.repeat(2500); el.append(extra); });
+  const headBefore = present(await page.locator('#module-name').boundingBox());
+  const closeBefore = present(await page.locator('#close-details').boundingBox());
+  await panel.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  assert.ok(await panel.evaluate(el => el.scrollTop > 0));
+  const headAfter = present(await page.locator('#module-name').boundingBox());
+  const closeAfter = present(await page.locator('#close-details').boundingBox());
+  assert.ok(Math.abs(headBefore.y - headAfter.y) < 1 && Math.abs(closeBefore.y - closeAfter.y) < 1);
   // Rule links span the detail column instead of shrinking to the global icon-button size.
   const linkWidths = await page.locator('#module-constraints').evaluate(section => [section.clientWidth, ...[...section.querySelectorAll('button')].map(button => button.getBoundingClientRect().width)]);
   assert.ok(linkWidths.length > 1 && linkWidths.slice(1).every(width => width >= present(linkWidths[0]) * .9), JSON.stringify(linkWidths));

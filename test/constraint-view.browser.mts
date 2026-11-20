@@ -28,7 +28,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => { errors.push(error.message); console.error(error.stack); });
   await page.goto(pathToFileURL(file).href + '#lang=zh');
   if (await page.locator('#guide-dismiss').isVisible()) await page.locator('#guide-dismiss').click();
   const actual = page.locator('#actual');
@@ -66,9 +66,10 @@ try {
   assert.match(await graph.locator('.cv-reader-body').textContent() || '', /Check work/);
   assert.notEqual(await graph.locator('.cv-reader-body').evaluate(el => getComputedStyle(el).userSelect), 'none');
   await graph.locator('.cv-card[data-id="check-1"]').press('Shift+Enter');
-  assert.equal(await graph.locator('.cv-dialog').isVisible(), true);
+  assert.equal(await graph.locator('.cv-reader').isVisible(), true);
+  assert.equal(await graph.locator('.cv-dialog').count(), 0);
   await page.keyboard.press('Escape');
-  assert.equal(await graph.locator('.cv-dialog').isVisible(), false);
+  assert.equal(await graph.locator('.cv-reader').isVisible(), false);
   await graph.locator('.cv-grouping').selectOption('topics');
   await page.setViewportSize({ width: 390, height: 844 });
   if (await graph.locator('.cv-directory').isVisible()) await graph.locator('.cv-directory-heading button').click();
@@ -97,8 +98,7 @@ try {
   assert.equal(await page.locator('.cv-card[data-id="secure-check"]').count(), 1);
   await assertUnmoved();
   await testing.dblclick();
-  assert.equal(await page.locator('.cv-dialog').isVisible(), true);
-  await page.locator('.cv-dialog-close').click();
+  assert.equal(await page.locator('.cv-dialog').count(), 0);
   assert.deepEqual(errors, []);
   console.log(`Constraint view checks passed. ${output}`);
 } finally {
