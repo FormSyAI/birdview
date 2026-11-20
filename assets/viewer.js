@@ -982,9 +982,11 @@ ${localized2(module, "responsibility")}`;
     themeButton();
   };
   themeButton();
+  if (reader) query("main").prepend($("theme"));
   if (reader) window.addEventListener("message", (event) => {
     if (event.source !== window.parent || event.data?.type !== "birdview:theme" || !["dark", "light"].includes(event.data.theme)) return;
     document.documentElement.dataset.theme = event.data.theme;
+    if (event.data.managed === true) $("theme").hidden = true;
     themeButton();
     requestAnimationFrame(reportReaderSize);
   });
@@ -2257,7 +2259,8 @@ ${localized2(check, "summary")}`);
   var guideKey = "birdview-guide-v1";
   var guideLaunch = document.createElement("button");
   guideLaunch.id = "guide-launch";
-  query(".header-actions").append(guideLaunch);
+  if (reader) query("main").prepend(guideLaunch);
+  else query(".header-actions").append(guideLaunch);
   var guideInvite = document.createElement("div");
   guideInvite.id = "guide-invite";
   guideInvite.innerHTML = '<span></span><button id="guide-start"></button><button id="guide-dismiss"></button>';
@@ -2265,6 +2268,13 @@ ${localized2(check, "summary")}`);
   try {
     guideInvite.hidden = localStorage.getItem(guideKey) === "seen";
   } catch {
+  }
+  if (reader && window.parent !== window) {
+    window.addEventListener("message", (event) => {
+      if (event.source !== window.parent || event.data?.type !== "birdview:guide-state" || typeof event.data.seen !== "boolean") return;
+      if (event.data.seen) guideInvite.hidden = true;
+    });
+    window.parent.postMessage({ type: "birdview:guide-ready" }, "*");
   }
   var guideDialog = document.createElement("dialog");
   guideDialog.id = "guide-dialog";
@@ -2389,6 +2399,7 @@ ${localized2(check, "summary")}`);
       localStorage.setItem(guideKey, "seen");
     } catch {
     }
+    if (reader && window.parent !== window) window.parent.postMessage({ type: "birdview:guide-seen" }, "*");
   }
   function startGuide() {
     if (guideDialog.open) return;
