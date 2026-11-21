@@ -14,6 +14,8 @@ npx skills add Qiuner/birdview --skill birdview --agent claude-code --global --c
 
 Omit `--global` for project scope. These install the current repository version. Use the archive method below for a fixed release. In the destination printed by the installer, run `npm ci` (including development dependencies), then `node scripts/birdview.mjs doctor`. The read-only self-check invokes the installed validation CLI through the installation path, checks its JSON report, and renders the bundled example in memory. It does not exercise every worker CLI or verify agent activation. The installer or agent may require a newer Node.js version than Birdview.
 
+On Linux, the subprocess adapter requires `/usr/bin/prlimit` (usually supplied by util-linux) and a writable temporary directory. It bounds child output and uses a 30-second default timeout; an unavailable `prlimit` or temporary directory fails the affected command. Ensure these are present in the deployed runtime as well as on development machines.
+
 Claude Code also supports manual installation into `~/.claude/skills/birdview` or `<project-root>/.claude/skills/birdview`. Keep the complete bundle as described below. For mode commands, add `--agent claude-code` to write/query `CLAUDE.md`; the default manages `AGENTS.md`.
 
 ## DeepSeek Harness

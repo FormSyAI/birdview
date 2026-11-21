@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync } from './sandbox-process.mjs';
 import { pathToFileURL } from 'node:url';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { reviewSchema } from './contracts/models.mjs';
